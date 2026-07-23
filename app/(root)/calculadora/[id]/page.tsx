@@ -1,9 +1,8 @@
-import Link from "next/link";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-
-export default function Home() {
+// Placeholder: detalle de la materia seleccionada, con acceso al formulario de notas.
+export default function CalculadoraMateria() {
   return (
-    <h1>Calculadora</h1>
+    <section className="section_container">
+      <h1 className="text-30-bold">Calculadora</h1>
+    </section>
   );
 }

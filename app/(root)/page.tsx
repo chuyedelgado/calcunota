@@ -11,8 +11,8 @@ export default function Home() {
         <p className="sub-heading !max-w-3xl">«Comienza haciendo lo que es necesario, luego lo que es posible, y de repente estarás haciendo lo imposible.»</p>
         <p className="text-14-normal !max-w-3xl">- San Francisco de Asís -</p>
         <div className="pt-5">
-          <Button className="calcular_btn">
-            <Link href={'/calculadora/${_id}'}>
+          <Button asChild className="calcular_btn">
+            <Link href="/calculadora">
               Calcular
             </Link>
           </Button>
@@ -94,8 +94,8 @@ export default function Home() {
         </div>
       </div>
       <div className="text-center pt-8 mx-auto justify-center items-center">
-          <Button className="calcular_btn">
-            <Link href={'/calculadora'}>
+          <Button asChild className="calcular_btn">
+            <Link href="/calculadora">
               Calcular
             </Link>
           </Button>

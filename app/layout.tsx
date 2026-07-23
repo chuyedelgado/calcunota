@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
-import path from "path";
 
 const workSans = localFont({
   src: [
@@ -43,11 +41,6 @@ const workSans = localFont({
   variable: '--font-work-sans',
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
   title: "CalcuNota",
   description: "Tendrás oportunidad de salvar la materia? veámoslo.",
@@ -59,10 +52,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={workSans.variable}
-      >
+    <html lang="es">
+      <body className={`${workSans.variable} font-work-sans`}>
         {children}
       </body>
     </html>

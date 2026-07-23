@@ -1,9 +1,8 @@
-import Link from "next/link";
-import Image from "next/image";
-import { Button } from "@/components/ui/button";
-
-export default function Home() {
+// Placeholder: captura de secciones, pesos y notas obtenidas (ver lib/calculo.ts, pendiente).
+export default function Formulario() {
   return (
-    <h1>Formulario</h1>
+    <section className="section_container">
+      <h1 className="text-30-bold">Formulario</h1>
+    </section>
   );
 }
