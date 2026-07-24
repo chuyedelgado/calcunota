@@ -1,0 +1,385 @@
+// CalcuNota — esquema de base de datos
+// Postgres + Prisma 7. Reemplaza el contenido de prisma/schema.prisma
+//
+//   npx prisma migrate dev --name esquema_inicial
+//   npx prisma generate
+//   npx prisma db seed
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// AUTENTICACIÓN — requerido por @auth/prisma-adapter
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  accounts Account[]
+  sessions Session[]
+  perfil   PerfilEstudiante?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================
+// ESCALA DE CALIFICACIÓN
+// Configurable por universidad. Los valores de la UTP se cargan en el
+// seed: A=91+ (3 pts), B=81-90 (2), C=71-80 (1), D=61-70 (0), F=<=60 (0).
+// ============================================================
+
+model EscalaNotas {
+  id         String @id @default(cuid())
+  nombre     String
+  notaMinima Float  @default(0)
+  notaMaxima Float  @default(100)
+
+  /// Nota mínima para aprobar una materia NO fundamental (UTP: 61 = D)
+  notaAprobacion Float
+
+  /// Nota mínima para que una materia FUNDAMENTAL cuente para graduarse.
+  /// Con menos que esto el estudiante avanza pero no puede graduarse (UTP: 71 = C)
+  notaAprobacionFundamental Float
+
+  /// Tope del índice académico (UTP: 3.0)
+  indiceMaximo Float @default(3.0)
+
+  rangos        RangoNota[]
+  universidades Universidad[]
+}
+
+/// Tramo de la escala. `puntos` es el valor que aporta al índice, que
+/// luego se pondera por los créditos de la materia.
+model RangoNota {
+  id       String  @id @default(cuid())
+  escalaId String
+  letra    String
+  desde    Float
+  hasta    Float
+  puntos   Float
+  aprueba  Boolean @default(true)
+
+  escala EscalaNotas @relation(fields: [escalaId], references: [id], onDelete: Cascade)
+
+  @@unique([escalaId, letra])
+}
+
+// ============================================================
+// CATÁLOGO ACADÉMICO
+// ============================================================
+
+model Universidad {
+  id       String  @id @default(cuid())
+  nombre   String
+  siglas   String  @unique
+  pais     String  @default("PA")
+  sitioWeb String?
+
+  escalaId String?
+  escala   EscalaNotas? @relation(fields: [escalaId], references: [id])
+
+  facultades Facultad[]
+  materias   Materia[]
+  profesores Profesor[]
+  perfiles   PerfilEstudiante[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Facultad {
+  id            String  @id @default(cuid())
+  nombre        String
+  siglas        String?
+  universidadId String
+
+  universidad Universidad @relation(fields: [universidadId], references: [id], onDelete: Cascade)
+  carreras    Carrera[]
+  profesores  Profesor[]
+
+  @@unique([universidadId, nombre])
+}
+
+enum Grado {
+  TECNICO
+  LICENCIATURA
+  INGENIERIA
+  MAESTRIA
+  DOCTORADO
+}
+
+model Carrera {
+  id         String @id @default(cuid())
+  nombre     String
+  grado      Grado
+  facultadId String
+
+  facultad Facultad      @relation(fields: [facultadId], references: [id], onDelete: Cascade)
+  planes   PlanEstudio[]
+
+  @@unique([facultadId, nombre, grado])
+}
+
+model PlanEstudio {
+  id            String  @id @default(cuid())
+  carreraId     String
+  version       String
+  vigente       Boolean @default(true)
+  archivoOrigen String?
+  totalCreditos Int     @default(0)
+
+  carrera  Carrera            @relation(fields: [carreraId], references: [id], onDelete: Cascade)
+  materias MateriaPlan[]
+  perfiles PerfilEstudiante[]
+
+  @@unique([carreraId, version])
+}
+
+/// Materia como entidad institucional. El mismo código se repite entre
+/// carreras (ej. 7987 CÁLCULO I aparece en casi todas las ingenierías).
+model Materia {
+  id            String @id @default(cuid())
+  codigo        String
+  nombre        String
+  universidadId String
+
+  universidad   Universidad    @relation(fields: [universidadId], references: [id], onDelete: Cascade)
+  planes        MateriaPlan[]
+  cursos        Curso[]
+  esRequisitoDe Prerequisito[] @relation("MateriaRequerida")
+
+  @@unique([universidadId, codigo])
+  @@index([nombre])
+}
+
+enum TipoMateria {
+  REGULAR
+  ELECTIVA
+  OPTATIVA
+}
+
+enum PeriodoPlan {
+  PRIMER_SEMESTRE
+  SEGUNDO_SEMESTRE
+  VERANO
+}
+
+/// Ubicación de una materia dentro de un plan concreto.
+/// `fundamental` proviene del marcador ** de los PDFs de la UTP y decide
+/// si aplica la nota mínima de C en vez de D.
+model MateriaPlan {
+  id        String @id @default(cuid())
+  planId    String
+  materiaId String
+
+  orden       Int?
+  anio        Int?
+  periodo     PeriodoPlan?
+  creditos    Int          @default(3)
+  fundamental Boolean      @default(false)
+  tipo        TipoMateria  @default(REGULAR)
+  area        String?
+
+  horasClase        Int     @default(0)
+  horasLaboratorio  Int     @default(0)
+  laboratorioPagado Boolean @default(false)
+
+  /// Requisitos escritos en texto, ej. "CURSAR TERCER AÑO"
+  requisitoTexto String?
+
+  plan          PlanEstudio    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  materia       Materia        @relation(fields: [materiaId], references: [id], onDelete: Cascade)
+  prerequisitos Prerequisito[]
+
+  @@unique([planId, materiaId])
+  @@index([planId, anio, periodo])
+}
+
+/// Prerequisito por código. Se resuelve en una segunda pasada del seed,
+/// cuando todas las materias ya existen.
+model Prerequisito {
+  id                 String @id @default(cuid())
+  materiaPlanId      String
+  materiaRequeridaId String
+
+  materiaPlan      MateriaPlan @relation(fields: [materiaPlanId], references: [id], onDelete: Cascade)
+  materiaRequerida Materia     @relation("MateriaRequerida", fields: [materiaRequeridaId], references: [id], onDelete: Cascade)
+
+  @@unique([materiaPlanId, materiaRequeridaId])
+}
+
+model Profesor {
+  id            String  @id @default(cuid())
+  nombre        String
+  universidadId String
+  facultadId    String?
+  verificado    Boolean @default(false)
+
+  universidad Universidad @relation(fields: [universidadId], references: [id], onDelete: Cascade)
+  facultad    Facultad?   @relation(fields: [facultadId], references: [id])
+  cursos      Curso[]
+
+  @@unique([universidadId, nombre])
+  @@index([nombre])
+}
+
+// ============================================================
+// DATOS DEL ESTUDIANTE
+// ============================================================
+
+model PerfilEstudiante {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  universidadId  String
+  planId         String
+  anioIngreso    Int
+  indiceObjetivo Float?
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  universidad Universidad @relation(fields: [universidadId], references: [id])
+  plan        PlanEstudio @relation(fields: [planId], references: [id])
+  cursos      Curso[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Periodo {
+  id     String      @id @default(cuid())
+  anio   Int
+  tipo   PeriodoPlan
+  inicio DateTime?
+  fin    DateTime?
+
+  cursos Curso[]
+
+  @@unique([anio, tipo])
+}
+
+enum EstadoCurso {
+  EN_CURSO
+  APROBADO
+  REPROBADO
+  RETIRADO
+}
+
+/// Materia cursada por un estudiante en un periodo. Unidad central del
+/// producto: de aquí salen el índice, las proyecciones y el histórico
+/// que alimentará el motor de probabilidades.
+model Curso {
+  id         String  @id @default(cuid())
+  perfilId   String
+  materiaId  String
+  periodoId  String
+  profesorId String?
+
+  estado      EstadoCurso @default(EN_CURSO)
+  objetivo    Float?
+  notaFinal   Float?
+  letraFinal  String?
+  puntos      Float?
+  creditos    Int         @default(3)
+  fundamental Boolean     @default(false)
+
+  /// true si es un repite de una materia cursada antes
+  esRepeticion Boolean @default(false)
+
+  perfil    PerfilEstudiante @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+  materia   Materia          @relation(fields: [materiaId], references: [id])
+  periodo   Periodo          @relation(fields: [periodoId], references: [id])
+  profesor  Profesor?        @relation(fields: [profesorId], references: [id])
+  secciones Seccion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([perfilId, materiaId, periodoId])
+  @@index([materiaId, profesorId, estado])
+  @@index([perfilId, periodoId])
+}
+
+/// Componente de evaluación. Los porcentajes de un curso deben sumar 100
+/// (se valida en la aplicación, no en la base).
+model Seccion {
+  id         String @id @default(cuid())
+  cursoId    String
+  nombre     String
+  porcentaje Float
+  cantidad   Int
+  orden      Int    @default(0)
+
+  curso Curso  @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  notas Nota[]
+
+  @@index([cursoId])
+}
+
+/// `puntaje` en null significa PENDIENTE, no cero. Esa distinción es la
+/// base del cálculo de "qué nota necesito en lo que queda".
+model Nota {
+  id          String    @id @default(cuid())
+  seccionId   String
+  orden       Int
+  descripcion String?
+  puntaje     Float?
+  puntajeMax  Float     @default(100)
+  fecha       DateTime?
+
+  seccion Seccion @relation(fields: [seccionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([seccionId, orden])
+  @@index([seccionId])
+}

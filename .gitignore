@@ -35,6 +35,8 @@ yarn-error.log*
 
 # python (scraping de materias)
 scraping_materias/scraping/
+scraping_materias/.venv/
+.venv/
 __pycache__/
 *.pyc
 
@@ -44,3 +46,5 @@ __pycache__/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/lib/generated/prisma
