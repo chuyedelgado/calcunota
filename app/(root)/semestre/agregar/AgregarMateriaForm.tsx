@@ -3,9 +3,14 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { esCalificable, validarSecciones } from "@/lib/calculos";
+import {
+  esCalificable,
+  nombrePeriodo,
+  nombreTipoPeriodo,
+  validarSecciones,
+  type TipoPeriodo,
+} from "@/lib/calculos";
 import { crearCurso, type EstadoCrearCurso } from "../actions";
-import { etiquetaPeriodo, type PeriodoTipo } from "../periodo";
 
 export type MateriaOpcion = {
   id: string; // MateriaPlan.id
@@ -40,7 +45,7 @@ export default function AgregarMateriaForm({
   materias: MateriaOpcion[];
   profesores: string[];
   anio: number;
-  tipo: PeriodoTipo;
+  tipo: TipoPeriodo;
 }) {
   const [estado, formAction, pendiente] = useActionState<EstadoCrearCurso, FormData>(
     crearCurso,
@@ -52,6 +57,17 @@ export default function AgregarMateriaForm({
 
   const materia = materias.find((m) => m.id === materiaPlanId);
   const calificable = materia ? esCalificable(materia.creditos) : false;
+
+  // Posición curricular dentro del plan (no una fecha del calendario):
+  // combina el año y el periodo sugeridos del plan → "Año 2 · 1er semestre".
+  const posicionCurricular = materia
+    ? [
+        materia.anioSugerido ? `Año ${materia.anioSugerido}` : null,
+        materia.periodoSugerido ? nombreTipoPeriodo(materia.periodoSugerido as TipoPeriodo) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
 
   // validarSecciones sólo usa el porcentaje; se completa la forma con notas: [].
   const validacion = validarSecciones(
@@ -81,7 +97,7 @@ export default function AgregarMateriaForm({
       <input type="hidden" name="anio" value={anio} />
       <input type="hidden" name="tipo" value={tipo} />
       <p className="text-16-medium">
-        Agregando a: <span className="font-semibold">{etiquetaPeriodo(tipo)} · {anio}</span>{" "}
+        Agregando a: <span className="font-semibold">{nombrePeriodo(anio, tipo)}</span>{" "}
         <Link href={`/semestre?anio=${anio}&tipo=${tipo}`} className="text-blue-800 underline">
           cambiar
         </Link>
@@ -122,8 +138,7 @@ export default function AgregarMateriaForm({
           </p>
           <p className="text-16-medium text-black-300">
             {materia.creditos} créditos
-            {materia.anioSugerido ? ` · Año ${materia.anioSugerido} sugerido` : ""}
-            {materia.periodoSugerido ? ` · ${etiquetaPeriodo(materia.periodoSugerido)}` : ""}
+            {posicionCurricular ? ` · ${posicionCurricular}` : ""}
             {materia.fundamental ? " · Fundamental" : ""}
           </p>
         </div>

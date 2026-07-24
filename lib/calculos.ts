@@ -58,6 +58,95 @@ export function habilitaGraduacion(nota: number, fundamental: boolean): boolean 
 }
 
 // ============================================================
+// Calendario académico de la UTP
+// ============================================================
+
+export type TipoPeriodo = "PRIMER_SEMESTRE" | "SEGUNDO_SEMESTRE" | "VERANO";
+
+/**
+ * Calendario de la UTP:
+ *   Verano          enero - febrero
+ *   Primer semestre marzo - julio
+ *   Segundo semestre agosto - diciembre
+ *
+ * El verano pertenece al mismo año calendario y ocurre PRIMERO, antes del
+ * primer semestre. No es un periodo de cierre de año.
+ */
+export function periodoDeFecha(fecha: Date = new Date()): {
+  anio: number;
+  tipo: TipoPeriodo;
+} {
+  const mes = fecha.getMonth() + 1;
+  const anio = fecha.getFullYear();
+  if (mes <= 2) return { anio, tipo: "VERANO" };
+  if (mes <= 7) return { anio, tipo: "PRIMER_SEMESTRE" };
+  return { anio, tipo: "SEGUNDO_SEMESTRE" };
+}
+
+/**
+ * Orden cronológico dentro de un año. NO coincide con el orden del enum
+ * PeriodoPlan de Prisma: ordenar por el enum pondría el verano al final.
+ */
+export const ORDEN_PERIODO: Record<TipoPeriodo, number> = {
+  VERANO: 0,
+  PRIMER_SEMESTRE: 1,
+  SEGUNDO_SEMESTRE: 2,
+};
+
+/**
+ * Valor para el campo `secuencia` de CursoIndice. Es lo que permite a
+ * calcularIndice() saber cuál intento de una materia fue el último y aplicar
+ * bien la regla de borrado de la D.
+ */
+export function secuenciaDePeriodo(anio: number, tipo: TipoPeriodo): number {
+  return anio * 3 + ORDEN_PERIODO[tipo];
+}
+
+/** Nombre del tipo de periodo, sin año: "Verano", "1er semestre", "2do semestre". */
+export function nombreTipoPeriodo(tipo: TipoPeriodo): string {
+  if (tipo === "VERANO") return "Verano";
+  if (tipo === "PRIMER_SEMESTRE") return "1er semestre";
+  return "2do semestre";
+}
+
+/** Etiqueta de un periodo del calendario: "Verano 2026", "1er semestre 2026". */
+export function nombrePeriodo(anio: number, tipo: TipoPeriodo): string {
+  return `${nombreTipoPeriodo(tipo)} ${anio}`;
+}
+
+// Tipos en orden cronológico dentro del año (Verano → 1er → 2do), derivado de
+// ORDEN_PERIODO para no volver a declararlo.
+const TIPOS_EN_ORDEN = (Object.keys(ORDEN_PERIODO) as TipoPeriodo[]).sort(
+  (a, b) => ORDEN_PERIODO[a] - ORDEN_PERIODO[b],
+);
+
+/** Enumera los periodos (año × tipo) del rango, en orden cronológico. */
+export function periodosEnRango(
+  desde: number,
+  hasta: number,
+): { anio: number; tipo: TipoPeriodo }[] {
+  const periodos: { anio: number; tipo: TipoPeriodo; seq: number }[] = [];
+  for (let a = desde; a <= hasta; a++) {
+    for (const tipo of TIPOS_EN_ORDEN) {
+      periodos.push({ anio: a, tipo, seq: secuenciaDePeriodo(a, tipo) });
+    }
+  }
+  return periodos.sort((x, y) => x.seq - y.seq).map(({ anio, tipo }) => ({ anio, tipo }));
+}
+
+/** Sanea el tipo recibido de un search param; cae en PRIMER_SEMESTRE si no es válido. */
+export function parseTipoPeriodo(valor: unknown): TipoPeriodo {
+  const s = String(valor ?? "");
+  return (s in ORDEN_PERIODO ? s : "PRIMER_SEMESTRE") as TipoPeriodo;
+}
+
+/** Sanea el año recibido de un search param; cae en `actual` si no es válido. */
+export function parseAnioPeriodo(valor: unknown, actual: number): number {
+  const n = Number(valor);
+  return Number.isInteger(n) && n >= 1980 && n <= actual + 1 ? n : actual;
+}
+
+// ============================================================
 // Índice académico
 // ============================================================
 

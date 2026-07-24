@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { esMarcadorDeElectiva } from "@/lib/calculos";
+import {
+  esMarcadorDeElectiva,
+  nombrePeriodo,
+  parseAnioPeriodo,
+  parseTipoPeriodo,
+  periodoDeFecha,
+} from "@/lib/calculos";
 import AgregarMateriaForm, { type MateriaOpcion } from "./AgregarMateriaForm";
-import { etiquetaPeriodo, parseAnio, parseTipo } from "../periodo";
 
 export default async function AgregarPage({
   searchParams,
@@ -23,10 +28,10 @@ export default async function AgregarPage({
     redirect("/onboarding");
   }
 
-  const anioActual = new Date().getFullYear();
+  const actual = periodoDeFecha();
   const sp = await searchParams;
-  const anio = parseAnio(sp.anio, anioActual);
-  const tipo = parseTipo(sp.tipo);
+  const anio = sp.anio != null ? parseAnioPeriodo(sp.anio, actual.anio) : actual.anio;
+  const tipo = sp.tipo != null ? parseTipoPeriodo(sp.tipo) : actual.tipo;
 
   // Materias del plan del perfil, con el snapshot sugerido.
   const materiasPlan = await prisma.materiaPlan.findMany({
@@ -76,7 +81,7 @@ export default async function AgregarPage({
     <section className="section_container">
       <h1 className="text-30-bold text-center mb-2">Agregar materia</h1>
       <p className="text-16-medium text-center text-black-100 mb-8">
-        {etiquetaPeriodo(tipo)} · {anio}
+        {nombrePeriodo(anio, tipo)}
       </p>
       <AgregarMateriaForm materias={materias} profesores={profesores} anio={anio} tipo={tipo} />
     </section>

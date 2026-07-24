@@ -3,8 +3,14 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
+import {
+  nombrePeriodo,
+  parseAnioPeriodo,
+  parseTipoPeriodo,
+  periodoDeFecha,
+  periodosEnRango,
+} from "@/lib/calculos";
 import PeriodoSelector from "./PeriodoSelector";
-import { etiquetaPeriodo, parseAnio, parseTipo } from "./periodo";
 
 export default async function SemestrePage({
   searchParams,
@@ -24,10 +30,11 @@ export default async function SemestrePage({
     redirect("/onboarding");
   }
 
-  const anioActual = new Date().getFullYear();
+  // Por defecto, el periodo actual del calendario de la UTP.
+  const actual = periodoDeFecha();
   const sp = await searchParams;
-  const anio = parseAnio(sp.anio, anioActual);
-  const tipo = parseTipo(sp.tipo);
+  const anio = sp.anio != null ? parseAnioPeriodo(sp.anio, actual.anio) : actual.anio;
+  const tipo = sp.tipo != null ? parseTipoPeriodo(sp.tipo) : actual.tipo;
 
   const cursos = await prisma.curso.findMany({
     where: { perfilId: perfil.id, periodo: { anio, tipo } },
@@ -43,22 +50,22 @@ export default async function SemestrePage({
     orderBy: { materia: { codigo: "asc" } },
   });
 
-  // Años ofrecidos: desde el ingreso hasta el año próximo.
-  const desde = Math.min(perfil.anioIngreso, anioActual);
-  const anios: number[] = [];
-  for (let a = anioActual + 1; a >= desde; a--) anios.push(a);
-
+  // Opciones del selector: desde el ingreso (o antes, si el periodo elegido es
+  // más antiguo) hasta el año próximo, en orden cronológico.
+  const desde = Math.min(perfil.anioIngreso, anio, actual.anio);
+  const periodos = periodosEnRango(desde, actual.anio + 1);
+  const clave = `${anio}:${tipo}`;
   const query = `anio=${anio}&tipo=${tipo}`;
 
   return (
     <section className="section_container">
       <h1 className="text-30-bold text-center mb-2">Mi semestre</h1>
       <p className="text-16-medium text-center text-black-100 mb-8">
-        {etiquetaPeriodo(tipo)} · {anio}
+        {nombrePeriodo(anio, tipo)}
       </p>
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <PeriodoSelector anio={anio} tipo={tipo} anios={anios} />
+        <PeriodoSelector periodos={periodos} clave={clave} />
         {cursos.length > 0 && (
           <Button asChild className="calcular_btn !text-[20px] !p-4">
             <Link href={`/semestre/agregar?${query}`}>Agregar materia</Link>

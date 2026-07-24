@@ -3,8 +3,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { esCalificable, validarSecciones } from "@/lib/calculos";
-import { parseTipo, type PeriodoTipo } from "./periodo";
+import { esCalificable, parseTipoPeriodo, validarSecciones, type TipoPeriodo } from "@/lib/calculos";
 
 export type EstadoCrearCurso = { error?: string };
 
@@ -41,7 +40,7 @@ export async function crearCurso(
 
   const materiaPlanId = String(formData.get("materiaPlanId") ?? "");
   const anio = Number(formData.get("anio"));
-  const tipo: PeriodoTipo = parseTipo(formData.get("tipo"));
+  const tipo: TipoPeriodo = parseTipoPeriodo(formData.get("tipo"));
   const profesorNombre = tituloCase(String(formData.get("profesorNombre") ?? ""));
   const seccionesRaw = String(formData.get("secciones") ?? "");
 
