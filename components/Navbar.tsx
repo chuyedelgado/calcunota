@@ -24,8 +24,9 @@ const Navbar = async () => {
                                 <button type="submit">Logout</button>
                             </form>
 
-                            {/* Sin ruta de perfil todavía: se muestra el nombre sin enlace. */}
-                            <span>{session?.user?.name}</span>
+                            <Link href={`/perfil/${session.user.id}`}>
+                                <span>{session.user.name}</span>
+                            </Link>
                         </>
                     ) : (
                         <form action={async ()=> {
