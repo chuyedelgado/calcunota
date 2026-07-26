@@ -13,6 +13,7 @@ import {
   type SeccionEvaluacion,
 } from "@/lib/calculos";
 import PanelObjetivo from "./PanelObjetivo";
+import { normalizar } from "@/lib/texto";
 import type { BorradorSeccion, NotaUI, SeccionUI } from "./tipos";
 
 const campo =
@@ -500,7 +501,12 @@ function EditorEsquema({
     setBorrador((prev) => prev.filter((_, idx) => idx !== i));
   }
   function agregar() {
-    setBorrador((prev) => [...prev, { id: `nueva-${Date.now()}-${prev.length}`, nombre: "", porcentaje: 0, cantidad: 1 }]);
+    setBorrador((prev) => {
+      const nueva: BorradorSeccion = { id: `nueva-${Date.now()}-${prev.length}`, nombre: "", porcentaje: 0, cantidad: 1 };
+      // El examen final va siempre al final: la sección nueva entra antes de él.
+      const idxFinal = prev.reduce((acc, s, i) => (normalizar(s.nombre).includes("final") ? i : acc), -1);
+      return idxFinal >= 0 ? [...prev.slice(0, idxFinal), nueva, ...prev.slice(idxFinal)] : [...prev, nueva];
+    });
   }
 
   async function guardar() {

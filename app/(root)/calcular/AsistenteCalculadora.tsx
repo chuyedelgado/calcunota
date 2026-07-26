@@ -335,9 +335,16 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
         orden: prev.length + 1,
         notas: [{ id: `${id}-n1`, orden: 1, descripcion: null, puntaje: null, puntajeMax: 100 }],
       };
-      const arr = [...prev, nueva];
+      // El examen final es siempre lo último: la sección nueva entra ANTES de él.
+      // Se detecta por nombre (tolerante a tildes/mayúsculas); si hay varias, la última.
+      const idxFinal = prev.reduce((acc, s, i) => (normalizar(s.nombre).includes("final") ? i : acc), -1);
+      const arr = idxFinal >= 0 ? [...prev.slice(0, idxFinal), nueva, ...prev.slice(idxFinal)] : [...prev, nueva];
       const base = Math.floor(100 / arr.length);
-      return arr.map((s, i) => ({ ...s, porcentaje: i === 0 ? base + (100 - base * arr.length) : base }));
+      return arr.map((s, i) => ({
+        ...s,
+        porcentaje: i === 0 ? base + (100 - base * arr.length) : base,
+        orden: i + 1,
+      }));
     });
   }
   function quitarSeccion(i: number) {

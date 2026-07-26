@@ -7,6 +7,7 @@ import { esCalificable, nombrePeriodo, validarSecciones, type TipoPeriodo } from
 import { crearCurso, type EstadoCrearCurso } from "../actions";
 import { nombreTipoPeriodo } from "../periodo";
 import { CLAVE_MATERIA_PUBLICA } from "@/components/calculadora/tipos";
+import { normalizar } from "@/lib/texto";
 
 export type MateriaOpcion = {
   id: string; // MateriaPlan.id
@@ -98,7 +99,13 @@ export default function AgregarMateriaForm({
     setFilas((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...cambio } : f)));
   }
   function agregarFila() {
-    setFilas((prev) => [...prev, { nombre: "", porcentaje: 0, cantidad: 1 }]);
+    setFilas((prev) => {
+      const nueva: Fila = { nombre: "", porcentaje: 0, cantidad: 1 };
+      // El examen final va siempre al final: la nueva sección entra antes de él.
+      // (el `orden` se persiste por índice de arreglo al crear el curso).
+      const idxFinal = prev.reduce((acc, f, i) => (normalizar(f.nombre).includes("final") ? i : acc), -1);
+      return idxFinal >= 0 ? [...prev.slice(0, idxFinal), nueva, ...prev.slice(idxFinal)] : [...prev, nueva];
+    });
   }
   function quitarFila(i: number) {
     setFilas((prev) => prev.filter((_, idx) => idx !== i));
