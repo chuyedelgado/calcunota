@@ -1,0 +1,172 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { Button } from "@/components/ui/button";
+import { esCalificable, nombrePeriodo, type TipoPeriodo } from "@/lib/calculos";
+import CalculadoraMateria from "./CalculadoraMateria";
+import CierreCurso from "./CierreCurso";
+import { marcarAprobada, reabrirCurso } from "./actions";
+import type { SeccionData } from "./tipos";
+
+export default async function CursoPage({ params }: { params: Promise<{ cursoId: string }> }) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/");
+  }
+
+  const perfil = await prisma.perfilEstudiante.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true },
+  });
+  if (!perfil) {
+    redirect("/onboarding");
+  }
+
+  const { cursoId } = await params;
+  const curso = await prisma.curso.findUnique({
+    where: { id: cursoId },
+    select: {
+      id: true,
+      perfilId: true,
+      materiaId: true,
+      creditos: true,
+      fundamental: true,
+      estado: true,
+      notaFinal: true,
+      letraFinal: true,
+      puntos: true,
+      materia: { select: { codigo: true, nombre: true } },
+      periodo: { select: { anio: true, tipo: true } },
+      profesor: { select: { nombre: true } },
+      secciones: {
+        orderBy: { orden: "asc" },
+        select: {
+          id: true,
+          nombre: true,
+          porcentaje: true,
+          cantidad: true,
+          orden: true,
+          notas: {
+            orderBy: { orden: "asc" },
+            select: { id: true, orden: true, descripcion: true, puntaje: true, puntajeMax: true },
+          },
+        },
+      },
+    },
+  });
+
+  // No basta con que el id exista: el curso debe ser del perfil de la sesión.
+  if (!curso || curso.perfilId !== perfil.id) {
+    notFound();
+  }
+
+  const periodoLabel = nombrePeriodo(curso.periodo.anio, curso.periodo.tipo as TipoPeriodo);
+
+  const encabezado = (
+    <div className="mb-8">
+      <Link href="/semestre" className="text-16-medium text-blue-800 underline">
+        ← Mi semestre
+      </Link>
+      <h1 className="text-30-bold mt-3">{curso.materia.nombre}</h1>
+      <p className="text-16-medium text-black-300 mt-1">
+        {curso.materia.codigo} · {curso.creditos} créditos
+        {curso.profesor ? ` · ${curso.profesor.nombre}` : " · Sin profesor"} · {periodoLabel}
+      </p>
+      {curso.fundamental && (
+        <span className="inline-block mt-3 text-14-normal !text-white bg-blue-800 rounded-full px-3 py-1">
+          Materia fundamental
+        </span>
+      )}
+    </div>
+  );
+
+  // Materias sin créditos (seminario, nivelación): no hay calculadora.
+  if (!esCalificable(curso.creditos)) {
+    const aprobada = curso.estado === "APROBADO";
+    return (
+      <section className="section_container max-w-2xl">
+        {encabezado}
+        <div className="border-2 border-black rounded-2xl p-6 bg-white">
+          <p className="text-16-medium">
+            Esta materia no tiene créditos: es un requisito que se aprueba, pero no se califica en
+            la escala numérica. No entra al índice.
+          </p>
+          {aprobada ? (
+            <p className="text-20-medium font-bold text-green-700 mt-4">Aprobada ✓</p>
+          ) : (
+            <form action={marcarAprobada.bind(null, curso.id)} className="mt-5">
+              <Button type="submit" className="calcular_btn w-full">
+                Marcar como aprobada
+              </Button>
+            </form>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  // Curso ya cerrado (o retirado): resumen + reabrir para corregir.
+  if (curso.estado !== "EN_CURSO") {
+    return (
+      <section className="section_container max-w-2xl">
+        {encabezado}
+        <div className="border-2 border-black rounded-2xl p-6 bg-white space-y-4">
+          {curso.estado === "RETIRADO" ? (
+            <p className="text-20-medium font-bold">Materia retirada</p>
+          ) : (
+            <>
+              <p className="text-30-bold leading-tight">
+                {curso.notaFinal !== null ? curso.notaFinal : "—"}
+                {curso.letraFinal ? (
+                  <span className="text-20-medium"> · {curso.letraFinal}</span>
+                ) : null}
+              </p>
+              <p className="text-16-medium text-black-300">
+                {curso.puntos} puntos · {curso.estado}
+              </p>
+              {curso.fundamental && curso.letraFinal === "D" && (
+                <div className="bg-rojo-suave border-2 border-rojo-fuerte/40 rounded-xl p-4">
+                  <p className="text-16-medium font-semibold">
+                    <span className="!text-rojo-fuerte font-bold">⚠ Bloquea tu graduación.</span> Con
+                    D en una materia fundamental avanzas, pero no puedes graduarte con ella hasta
+                    subirla a C.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+          <form action={reabrirCurso.bind(null, curso.id)}>
+            <button
+              type="submit"
+              className="w-full border-2 border-black bg-white rounded-xl py-3 text-16-medium font-semibold"
+            >
+              Reabrir para corregir
+            </button>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="section_container max-w-2xl">
+      {encabezado}
+      <CalculadoraMateria
+        cursoId={curso.id}
+        fundamental={curso.fundamental}
+        seccionesIniciales={curso.secciones as SeccionData[]}
+      />
+      <div className="mt-8">
+        <CierreCurso
+          cursoId={curso.id}
+          fundamental={curso.fundamental}
+          materiaId={curso.materiaId}
+          creditos={curso.creditos}
+          anio={curso.periodo.anio}
+          tipo={curso.periodo.tipo as TipoPeriodo}
+        />
+      </div>
+    </section>
+  );
+}
