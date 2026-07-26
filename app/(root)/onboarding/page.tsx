@@ -17,7 +17,7 @@ export default async function OnboardingPage() {
     select: { id: true },
   });
   if (perfil) {
-    redirect("/");
+    redirect("/semestre");
   }
 
   // 3. Árbol completo facultades → carreras → planes de la UTP en UNA consulta

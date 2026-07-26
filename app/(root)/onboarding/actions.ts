@@ -25,7 +25,7 @@ export async function crearPerfil(
     select: { id: true },
   });
   if (yaTiene) {
-    redirect("/");
+    redirect("/semestre");
   }
 
   const facultadId = String(formData.get("facultadId") ?? "");
@@ -95,5 +95,5 @@ export async function crearPerfil(
     return { error: "Ya tienes un perfil creado." };
   }
 
-  redirect("/");
+  redirect("/semestre");
 }

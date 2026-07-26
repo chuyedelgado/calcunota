@@ -168,7 +168,7 @@ export default function OnboardingForm({
       {/* Índice objetivo (opcional) */}
       <div>
         <label htmlFor="indiceObjetivo" className="block text-16-medium font-semibold mb-2">
-          Índice objetivo <span className="text-black-300 font-normal">(opcional)</span>
+          Índice objetivo <span className="text-black-300 font-normal">(sugerido, editable)</span>
         </label>
         <input
           id="indiceObjetivo"
@@ -178,6 +178,7 @@ export default function OnboardingForm({
           min={0}
           max={3}
           step={0.1}
+          defaultValue={2}
           placeholder="Entre 0 y 3.0"
         />
       </div>
