@@ -24,21 +24,39 @@ export type Rango = {
 
 export const ESCALA_UTP: Rango[] = [
   { letra: "A", desde: 91, hasta: 100, puntos: 3, aprueba: true },
-  { letra: "B", desde: 81, hasta: 90.99, puntos: 2, aprueba: true },
-  { letra: "C", desde: 71, hasta: 80.99, puntos: 1, aprueba: true },
-  { letra: "D", desde: 61, hasta: 70.99, puntos: 0, aprueba: true },
-  { letra: "F", desde: 0, hasta: 60.99, puntos: 0, aprueba: false },
+  { letra: "B", desde: 81, hasta: 90, puntos: 2, aprueba: true },
+  { letra: "C", desde: 71, hasta: 80, puntos: 1, aprueba: true },
+  { letra: "D", desde: 61, hasta: 70, puntos: 0, aprueba: true },
+  { letra: "F", desde: 0, hasta: 60, puntos: 0, aprueba: false },
 ];
 
 export const APROBACION_NORMAL = 61;
 export const APROBACION_FUNDAMENTAL = 71;
 
-/** Convierte una nota numérica a su tramo de la escala. */
+/**
+ * Convierte una nota numérica a su tramo de la escala.
+ *
+ * La UTP TRUNCA, no redondea: un 90.9 es B, no A. Esto tiene una consecuencia
+ * en cadena sobre las proyecciones, ver `techo()` más abajo.
+ */
 export function notaARango(nota: number, escala: Rango[] = ESCALA_UTP): Rango {
-  const redondeada = Math.round(nota);
-  const rango = escala.find((r) => redondeada >= r.desde && redondeada <= r.hasta);
+  const truncada = Math.min(100, Math.max(0, Math.floor(nota)));
+  const rango = escala.find((r) => truncada >= r.desde && truncada <= r.hasta);
   if (!rango) throw new Error(`Nota fuera de escala: ${nota}`);
   return rango;
+}
+
+/**
+ * Redondeo hacia arriba a `decimales` posiciones.
+ *
+ * Toda meta que se le muestre al estudiante DEBE pasar por aquí. Como la UTP
+ * trunca, quedarse una centésima corto cuesta una letra completa: si el
+ * requisito real es 57.53 y mostramos 57.5, el estudiante termina en 70.99,
+ * la UTP trunca a 70, y la C prometida se convierte en D.
+ */
+export function techo(valor: number, decimales = 1): number {
+  const f = Math.pow(10, decimales);
+  return Math.ceil(valor * f - 1e-9) / f;
 }
 
 export function notaALetra(nota: number, escala: Rango[] = ESCALA_UTP): string {
@@ -47,6 +65,43 @@ export function notaALetra(nota: number, escala: Rango[] = ESCALA_UTP): string {
 
 export function notaAPuntos(nota: number, escala: Rango[] = ESCALA_UTP): number {
   return notaARango(nota, escala).puntos;
+}
+
+// ============================================================
+// Calificación por letra (para carga de historial)
+// ============================================================
+
+export type Letra = "A" | "B" | "C" | "D" | "F";
+
+export const LETRAS: Letra[] = ["A", "B", "C", "D", "F"];
+
+/**
+ * Puntos de una letra directamente, sin pasar por una nota numérica.
+ *
+ * El historial se carga por letra porque es lo que el estudiante recuerda y lo
+ * que aparece en su expediente. Una letra es un rango, no un número, así que
+ * para el índice se usan sus puntos directos: A=3, B=2, C=1, D=0, F=0. Este es
+ * exactamente el modelo del índice oficial de la UTP.
+ */
+export function letraAPuntos(letra: Letra, escala: Rango[] = ESCALA_UTP): number {
+  const rango = escala.find((r) => r.letra === letra);
+  if (!rango) throw new Error(`Letra fuera de escala: ${letra}`);
+  return rango.puntos;
+}
+
+export function letraAprueba(letra: Letra, escala: Rango[] = ESCALA_UTP): boolean {
+  const rango = escala.find((r) => r.letra === letra);
+  if (!rango) throw new Error(`Letra fuera de escala: ${letra}`);
+  return rango.aprueba;
+}
+
+/**
+ * ¿Esta letra permite graduarse con esta materia?
+ * Fundamentales requieren C; el resto, D. La F nunca aprueba.
+ */
+export function letraHabilitaGraduacion(letra: Letra, fundamental: boolean): boolean {
+  if (letra === "F") return false;
+  return fundamental ? letra !== "D" : true;
 }
 
 /**
@@ -102,48 +157,11 @@ export function secuenciaDePeriodo(anio: number, tipo: TipoPeriodo): number {
   return anio * 3 + ORDEN_PERIODO[tipo];
 }
 
-/** Nombre del tipo de periodo, sin año: "Verano", "1er semestre", "2do semestre". */
-export function nombreTipoPeriodo(tipo: TipoPeriodo): string {
-  if (tipo === "VERANO") return "Verano";
-  if (tipo === "PRIMER_SEMESTRE") return "1er semestre";
-  return "2do semestre";
-}
-
-/** Etiqueta de un periodo del calendario: "Verano 2026", "1er semestre 2026". */
+/** Etiqueta legible: "Verano 2026", "1er semestre 2026" */
 export function nombrePeriodo(anio: number, tipo: TipoPeriodo): string {
-  return `${nombreTipoPeriodo(tipo)} ${anio}`;
-}
-
-// Tipos en orden cronológico dentro del año (Verano → 1er → 2do), derivado de
-// ORDEN_PERIODO para no volver a declararlo.
-const TIPOS_EN_ORDEN = (Object.keys(ORDEN_PERIODO) as TipoPeriodo[]).sort(
-  (a, b) => ORDEN_PERIODO[a] - ORDEN_PERIODO[b],
-);
-
-/** Enumera los periodos (año × tipo) del rango, en orden cronológico. */
-export function periodosEnRango(
-  desde: number,
-  hasta: number,
-): { anio: number; tipo: TipoPeriodo }[] {
-  const periodos: { anio: number; tipo: TipoPeriodo; seq: number }[] = [];
-  for (let a = desde; a <= hasta; a++) {
-    for (const tipo of TIPOS_EN_ORDEN) {
-      periodos.push({ anio: a, tipo, seq: secuenciaDePeriodo(a, tipo) });
-    }
-  }
-  return periodos.sort((x, y) => x.seq - y.seq).map(({ anio, tipo }) => ({ anio, tipo }));
-}
-
-/** Sanea el tipo recibido de un search param; cae en PRIMER_SEMESTRE si no es válido. */
-export function parseTipoPeriodo(valor: unknown): TipoPeriodo {
-  const s = String(valor ?? "");
-  return (s in ORDEN_PERIODO ? s : "PRIMER_SEMESTRE") as TipoPeriodo;
-}
-
-/** Sanea el año recibido de un search param; cae en `actual` si no es válido. */
-export function parseAnioPeriodo(valor: unknown, actual: number): number {
-  const n = Number(valor);
-  return Number.isInteger(n) && n >= 1980 && n <= actual + 1 ? n : actual;
+  if (tipo === "VERANO") return `Verano ${anio}`;
+  if (tipo === "PRIMER_SEMESTRE") return `1er semestre ${anio}`;
+  return `2do semestre ${anio}`;
 }
 
 // ============================================================
@@ -154,10 +172,36 @@ export type CursoIndice = {
   id: string;
   materiaId: string;
   creditos: number;
+  /**
+   * Nota en escala 0-100. Se usa para el semestre en curso, donde la nota se
+   * calcula desde las evaluaciones. En null si el curso se cargó por letra.
+   */
   notaFinal: number | null;
+  /**
+   * Letra directa. Se usa cuando el historial se cargó por calificación en vez
+   * de por número. Si viene, tiene prioridad sobre notaFinal para el índice.
+   */
+  letra?: Letra | null;
   /** Orden cronológico. Menor = más antiguo. */
   secuencia: number;
 };
+
+/** Puntos de un curso, venga por letra o por nota numérica. */
+function puntosDeCurso(c: CursoIndice): number {
+  if (c.letra != null) return letraAPuntos(c.letra);
+  return notaAPuntos(c.notaFinal!);
+}
+
+/** Letra de un curso, venga directa o derivada de la nota numérica. */
+function letraDeCurso(c: CursoIndice): Letra {
+  if (c.letra != null) return c.letra;
+  return notaALetra(c.notaFinal!) as Letra;
+}
+
+/** ¿El curso tiene un resultado cargado (por letra o por nota)? */
+function tieneResultado(c: CursoIndice): boolean {
+  return c.letra != null || c.notaFinal != null;
+}
 
 export type ResultadoIndice = {
   puntos: number;
@@ -207,7 +251,7 @@ export function cursosQueCuentan(cursos: CursoIndice[]): {
   const noCalificables: string[] = [];
 
   for (const c of cursos) {
-    if (c.notaFinal === null) continue; // aún en curso
+    if (!tieneResultado(c)) continue; // aún en curso
     if (!esCalificable(c.creditos)) {
       // Seminario, nivelación, huecos de electiva: se aprueban pero no
       // entran al cálculo. Se excluyen aquí de forma explícita en vez de
@@ -232,7 +276,7 @@ export function cursosQueCuentan(cursos: CursoIndice[]): {
         cuentan.push(intento);
         continue;
       }
-      const letra = notaALetra(intento.notaFinal!);
+      const letra = letraDeCurso(intento);
       if (letra === "D") {
         excluidos.push(intento.id); // la D se borra al repetir
       } else {
@@ -251,7 +295,7 @@ export function calcularIndice(cursos: CursoIndice[]): ResultadoIndice {
   let creditos = 0;
 
   for (const c of cuentan) {
-    puntos += notaAPuntos(c.notaFinal!) * c.creditos;
+    puntos += puntosDeCurso(c) * c.creditos;
     creditos += c.creditos;
   }
 
@@ -408,7 +452,7 @@ export function proyectar(
     };
   }
 
-  const necesaria = ((objetivo - estado.notaActual) / restante) * 100;
+  const necesaria = techo(((objetivo - estado.notaActual) / restante) * 100);
 
   if (necesaria > 100) {
     return {
@@ -442,4 +486,268 @@ export function proyectarEscala(
   ];
   const unicos = [...new Set(objetivos)].sort((a, b) => a - b);
   return unicos.map((o) => proyectar(secciones, o));
+}
+
+// ============================================================
+// Nombres automáticos de evaluaciones
+// ============================================================
+
+const SINGULARES: Record<string, string> = {
+  parciales: "Parcial",
+  talleres: "Taller",
+  quices: "Quiz",
+  quizzes: "Quiz",
+  tareas: "Tarea",
+  laboratorios: "Laboratorio",
+  laboratorio: "Laboratorio",
+  examenes: "Examen",
+  exámenes: "Examen",
+  proyectos: "Proyecto",
+  presentaciones: "Presentación",
+  asignaciones: "Asignación",
+  practicas: "Práctica",
+  prácticas: "Práctica",
+  informes: "Informe",
+  ensayos: "Ensayo",
+  trabajos: "Trabajo",
+  pruebas: "Prueba",
+  evaluaciones: "Evaluación",
+  giras: "Gira",
+  foros: "Foro",
+};
+
+function singular(nombreSeccion: string): string {
+  const limpio = nombreSeccion.trim();
+  const clave = limpio.toLocaleLowerCase("es");
+
+  if (SINGULARES[clave]) return SINGULARES[clave];
+
+  // Reglas generales del español, de más específica a menos
+  if (/[aeiouáéíóú]s$/i.test(limpio)) return limpio.slice(0, -1); // Tareas -> Tarea
+  if (/es$/i.test(limpio)) return limpio.slice(0, -2); // Talleres -> Taller
+  if (/s$/i.test(limpio)) return limpio.slice(0, -1);
+
+  return limpio; // ya está en singular
+}
+
+/**
+ * Genera el nombre de una evaluación a partir del nombre de su sección.
+ * "Parciales" con 3 notas -> "Parcial #1", "Parcial #2", "Parcial #3".
+ * Si la sección tiene una sola nota, no se numera: "Examen final".
+ */
+export function nombreEvaluacion(
+  nombreSeccion: string,
+  orden: number,
+  cantidad: number
+): string {
+  if (cantidad <= 1) return nombreSeccion.trim();
+  return `${singular(nombreSeccion)} #${orden}`;
+}
+
+// ============================================================
+// Proyección detallada por evaluación
+// ============================================================
+
+export type Exigencia = "holgado" | "en linea" | "exigente" | "muy exigente";
+
+export type MetaEvaluacion = {
+  seccionIndice: number;
+  seccionNombre: string;
+  /** Posición dentro de la sección, base 1 */
+  orden: number;
+  etiqueta: string;
+  /** Porcentaje de la nota final que carga esta evaluación */
+  peso: number;
+  /** Meta en escala 0-100 */
+  meta: number;
+  /** Meta expresada en el puntaje real de la evaluación */
+  metaEnPuntaje: number;
+  puntajeMax: number;
+  /** Desempeño demostrado que se usó para repartir */
+  referencia: number;
+  exigencia: Exigencia;
+};
+
+export type PlanObjetivo = {
+  objetivo: number;
+  alcanzable: boolean;
+  yaAlcanzado: boolean;
+  /** Promedio simple necesario, para comparar con el reparto */
+  promedioNecesario: number | null;
+  metas: MetaEvaluacion[];
+  mensaje: string;
+};
+
+function clasificar(meta: number, referencia: number): Exigencia {
+  const d = meta - referencia;
+  if (d <= -5) return "holgado";
+  if (d <= 5) return "en linea";
+  if (d <= 15) return "exigente";
+  return "muy exigente";
+}
+
+/**
+ * Reparte lo que falta para un objetivo entre las evaluaciones pendientes,
+ * proporcionalmente al desempeño que el estudiante ya demostró en cada
+ * sección. Quien va mejor en talleres recibe metas más altas ahí.
+ *
+ * El reparto respeta el tope de 100: si una evaluación se pasa, se fija en
+ * 100 y el excedente se redistribuye entre las demás.
+ *
+ * Cuando exista volumen de datos, `referencia` puede pasar a alimentarse de
+ * la distribución real de la materia con ese profesor en vez del historial
+ * propio. El resto del algoritmo no cambia.
+ */
+export function distribuirObjetivo(
+  secciones: SeccionEvaluacion[],
+  objetivo: number
+): PlanObjetivo {
+  const estado = calcularEstadoMateria(secciones);
+  const faltante = objetivo - estado.notaActual;
+
+  type Pendiente = {
+    seccionIndice: number;
+    seccionNombre: string;
+    orden: number;
+    etiqueta: string;
+    peso: number;
+    puntajeMax: number;
+    referencia: number;
+    meta: number;
+    fijada: boolean;
+  };
+
+  // Desempeño global, como respaldo cuando una sección no tiene notas aún
+  const global = estado.promedioParcial;
+  const pendientes: Pendiente[] = [];
+
+  secciones.forEach((seccion, si) => {
+    if (seccion.cantidad <= 0) return;
+    const pesoPorNota = seccion.porcentaje / seccion.cantidad;
+
+    const realizadas = seccion.notas.filter((n) => n.puntaje !== null);
+    const promedioSeccion = realizadas.length
+      ? realizadas.reduce((a, n) => a + normalizar(n), 0) / realizadas.length
+      : null;
+
+    // Si no hay dato de la sección ni global, se usa el propio objetivo como
+    // referencia neutra: reparto plano.
+    const referencia = promedioSeccion ?? global ?? objetivo;
+
+    for (let i = 0; i < seccion.cantidad; i++) {
+      const nota = seccion.notas[i];
+      if (nota && nota.puntaje !== null) continue;
+      pendientes.push({
+        seccionIndice: si,
+        seccionNombre: seccion.nombre,
+        orden: i + 1,
+        etiqueta: nombreEvaluacion(seccion.nombre, i + 1, seccion.cantidad),
+        peso: pesoPorNota,
+        puntajeMax: nota?.puntajeMax ?? 100,
+        referencia: Math.max(1, Math.min(100, referencia)),
+        meta: 0,
+        fijada: false,
+      });
+    }
+  });
+
+  if (estado.notaActual >= objetivo) {
+    return {
+      objetivo,
+      alcanzable: true,
+      yaAlcanzado: true,
+      promedioNecesario: 0,
+      metas: pendientes.map((p) => ({ ...p, meta: 0, metaEnPuntaje: 0, exigencia: "holgado" as Exigencia })),
+      mensaje: "Ya aseguraste este objetivo. Lo que falte no lo cambia.",
+    };
+  }
+
+  if (pendientes.length === 0) {
+    return {
+      objetivo,
+      alcanzable: false,
+      yaAlcanzado: false,
+      promedioNecesario: null,
+      metas: [],
+      mensaje: "No quedan evaluaciones pendientes. La nota ya está definida.",
+    };
+  }
+
+  const pesoRestante = pendientes.reduce((a, p) => a + p.peso, 0);
+  const promedioNecesario = techo((faltante / pesoRestante) * 100);
+
+  // Si ni con 100 en todo lo pendiente se llega, no hay reparto posible.
+  if (estado.notaMaxima < objetivo - 0.001) {
+    return {
+      objetivo,
+      alcanzable: false,
+      yaAlcanzado: false,
+      promedioNecesario,
+      metas: pendientes.map((p) => ({
+        seccionIndice: p.seccionIndice,
+        seccionNombre: p.seccionNombre,
+        orden: p.orden,
+        etiqueta: p.etiqueta,
+        peso: p.peso,
+        meta: 100,
+        metaEnPuntaje: p.puntajeMax,
+        puntajeMax: p.puntajeMax,
+        referencia: Math.round(p.referencia * 10) / 10,
+        exigencia: "muy exigente" as Exigencia,
+      })),
+      mensaje: `Aunque saques 100 en todo lo que falta, el máximo alcanzable es ${estado.notaMaxima.toFixed(1)}.`,
+    };
+  }
+
+  // Reparto proporcional con tope en 100 y redistribución iterativa
+  let porRepartir = faltante;
+  let libres = [...pendientes];
+
+  for (let vuelta = 0; vuelta < 20 && libres.length > 0; vuelta++) {
+    const base = libres.reduce((a, p) => a + (p.peso * p.referencia) / 100, 0);
+    if (base <= 0) break;
+
+    const k = porRepartir / base;
+    let seFijoAlguna = false;
+
+    for (const p of libres) {
+      const propuesta = p.referencia * k;
+      if (propuesta > 100) {
+        p.meta = 100;
+        p.fijada = true;
+        porRepartir -= (p.peso * 100) / 100;
+        seFijoAlguna = true;
+      } else {
+        p.meta = Math.max(0, propuesta);
+      }
+    }
+
+    if (!seFijoAlguna) break;
+    libres = libres.filter((p) => !p.fijada);
+  }
+
+  const alcanzable = true;
+  const metas: MetaEvaluacion[] = pendientes.map((p) => ({
+    seccionIndice: p.seccionIndice,
+    seccionNombre: p.seccionNombre,
+    orden: p.orden,
+    etiqueta: p.etiqueta,
+    peso: p.peso,
+    meta: techo(Math.min(100, p.meta)),
+    metaEnPuntaje: techo((Math.min(100, p.meta) / 100) * p.puntajeMax),
+    puntajeMax: p.puntajeMax,
+    referencia: Math.round(p.referencia * 10) / 10,
+    exigencia: clasificar(p.meta, p.referencia),
+  }));
+
+  return {
+    objetivo,
+    alcanzable,
+    yaAlcanzado: false,
+    promedioNecesario,
+    metas,
+    mensaje: alcanzable
+      ? `Repartido según tu desempeño en cada sección.`
+      : `Aunque saques 100 en todo lo que falta, el máximo alcanzable es ${estado.notaMaxima.toFixed(1)}.`,
+  };
 }
