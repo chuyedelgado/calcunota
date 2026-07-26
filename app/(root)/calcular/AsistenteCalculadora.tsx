@@ -11,6 +11,7 @@ import {
 } from "@/lib/calculos";
 import PanelObjetivo from "@/components/calculadora/PanelObjetivo";
 import { CLAVE_MATERIA_PUBLICA, plantillaInicial, type NotaUI, type SeccionUI } from "@/components/calculadora/tipos";
+import { buscar as buscarTexto, normalizar } from "@/lib/texto";
 import { iniciarSesion } from "../nav-actions";
 import { buscarMateriasPublico, buscarProfesoresPublico } from "./actions";
 
@@ -54,8 +55,8 @@ function Combobox({
   function onInput(v: string) {
     onChange(v);
     if (opciones) {
-      const q = v.trim().toLowerCase();
-      setSug((q ? opciones.filter((o) => o.toLowerCase().includes(q)) : opciones).slice(0, 8));
+      const q = v.trim();
+      setSug((q ? buscarTexto(opciones, q, (o) => o) : opciones).slice(0, 8));
       setAbierto(true);
     } else if (buscar) {
       if (timer.current) clearTimeout(timer.current);

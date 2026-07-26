@@ -10,6 +10,7 @@ import {
   type Letra,
   type TipoPeriodo,
 } from "@/lib/calculos";
+import { buscar, nombreProfesor } from "@/lib/texto";
 
 async function perfilDeSesion() {
   const session = await auth();
@@ -18,16 +19,6 @@ async function perfilDeSesion() {
     where: { userId: session.user.id },
     select: { id: true, planId: true, universidadId: true },
   });
-}
-
-function tituloCase(valor: string): string {
-  return valor
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
 }
 
 const TIPOS_VALIDOS = new Set<TipoPeriodo>(["PRIMER_SEMESTRE", "SEGUNDO_SEMESTRE", "VERANO"]);
@@ -49,27 +40,32 @@ export async function buscarMaterias(query: string): Promise<MateriaBuscada[]> {
   const q = query.trim();
   if (q.length < 2) return [];
 
-  const materias = await prisma.materia.findMany({
-    where: {
-      universidadId: perfil.universidadId,
-      OR: [{ codigo: { contains: q } }, { nombre: { contains: q, mode: "insensitive" } }],
-    },
-    select: {
-      id: true,
-      codigo: true,
-      nombre: true,
-      planes: { select: { creditos: true, fundamental: true }, take: 1 },
-    },
-    take: 25,
-    orderBy: { codigo: "asc" },
+  // Filtro tolerante en memoria (tildes, mayúsculas, romanos, orden libre) con
+  // lib/texto, en dos pasos: primero se acota el catálogo con lo ligero
+  // (código + nombre) y luego se leen créditos/fundamental solo de las 25 que
+  // pasan, para no arrastrar la relación `planes` de toda la universidad.
+  const todas = await prisma.materia.findMany({
+    where: { universidadId: perfil.universidadId },
+    select: { id: true, codigo: true, nombre: true },
   });
+  const top = buscar(todas, q, (m) => `${m.codigo} ${m.nombre}`).slice(0, 25);
+  if (top.length === 0) return [];
 
-  return materias.map((m) => ({
+  const planes = await prisma.materiaPlan.findMany({
+    where: { materiaId: { in: top.map((m) => m.id) } },
+    select: { materiaId: true, creditos: true, fundamental: true },
+  });
+  const porMateria = new Map<string, { creditos: number; fundamental: boolean }>();
+  for (const p of planes) {
+    if (!porMateria.has(p.materiaId)) porMateria.set(p.materiaId, { creditos: p.creditos, fundamental: p.fundamental });
+  }
+
+  return top.map((m) => ({
     id: m.id,
     codigo: m.codigo,
     nombre: m.nombre,
-    creditos: m.planes[0]?.creditos ?? 3,
-    fundamental: m.planes[0]?.fundamental ?? false,
+    creditos: porMateria.get(m.id)?.creditos ?? 3,
+    fundamental: porMateria.get(m.id)?.fundamental ?? false,
   }));
 }
 
@@ -210,7 +206,7 @@ export async function guardarHistorial(items: ItemHistorial[]): Promise<Resultad
     });
 
     let profesorId: string | undefined;
-    const nombre = r.profesorNombre?.trim() ? tituloCase(r.profesorNombre) : "";
+    const nombre = r.profesorNombre?.trim() ? nombreProfesor(r.profesorNombre) : "";
     if (nombre) {
       const prof = await prisma.profesor.upsert({
         where: { universidadId_nombre: { universidadId: perfil.universidadId, nombre } },

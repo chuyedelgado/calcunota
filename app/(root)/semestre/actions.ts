@@ -12,23 +12,12 @@ import {
   type TipoPeriodo,
 } from "@/lib/calculos";
 import { calcularIndiceDesdeCursos } from "@/lib/indice";
+import { nombreProfesor } from "@/lib/texto";
 import { parseTipoPeriodo } from "./periodo";
 
 export type EstadoCrearCurso = { error?: string };
 
 type FilaSeccion = { nombre: string; porcentaje: number; cantidad: number };
-
-// trim + Title Case, para no generar profesores duplicados como
-// "juan perez" / "JUAN PEREZ".
-function tituloCase(valor: string): string {
-  return valor
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
-}
 
 export async function crearCurso(
   _prev: EstadoCrearCurso,
@@ -50,7 +39,7 @@ export async function crearCurso(
   const materiaPlanId = String(formData.get("materiaPlanId") ?? "");
   const anio = Number(formData.get("anio"));
   const tipo: TipoPeriodo = parseTipoPeriodo(formData.get("tipo"));
-  const profesorNombre = tituloCase(String(formData.get("profesorNombre") ?? ""));
+  const profesorNombre = nombreProfesor(String(formData.get("profesorNombre") ?? ""));
   const seccionesRaw = String(formData.get("secciones") ?? "");
 
   if (!materiaPlanId) {

@@ -13,6 +13,7 @@ import {
   validarSecciones,
   type TipoPeriodo,
 } from "@/lib/calculos";
+import { nombreProfesor } from "@/lib/texto";
 import type { SeccionData } from "./tipos";
 
 async function perfilDeSesion() {
@@ -198,17 +199,6 @@ async function perfilConUni() {
   });
 }
 
-// trim + Title Case, para no duplicar profesores.
-function tituloCase(valor: string): string {
-  return valor
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
-}
-
 export type CursoCerradoRef = {
   id: string;
   materiaId: string;
@@ -337,7 +327,7 @@ export async function cerrarCurso(input: {
   const estado = input.notaFinal >= APROBACION_NORMAL ? "APROBADO" : "REPROBADO";
 
   let profesorId: string | undefined;
-  const nombre = input.profesorNombre?.trim() ? tituloCase(input.profesorNombre) : "";
+  const nombre = input.profesorNombre?.trim() ? nombreProfesor(input.profesorNombre) : "";
   if (nombre) {
     const prof = await prisma.profesor.upsert({
       where: { universidadId_nombre: { universidadId: perfil.universidadId, nombre } },

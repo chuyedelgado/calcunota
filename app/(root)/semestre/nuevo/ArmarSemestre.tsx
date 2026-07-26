@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { crearSemestre } from "../actions";
 import type { TipoPeriodo } from "@/lib/calculos";
+import { buscar } from "@/lib/texto";
 
 export type MateriaSugerida = {
   materiaPlanId: string;
@@ -41,14 +42,15 @@ export default function ArmarSemestre({
       return n;
     });
 
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   const resultados =
     q.length < 2
       ? []
-      : otras
-          .filter((m) => !agregadas.some((a) => a.materiaPlanId === m.materiaPlanId))
-          .filter((m) => m.codigo.includes(q) || m.nombre.toLowerCase().includes(q))
-          .slice(0, 8);
+      : buscar(
+          otras.filter((m) => !agregadas.some((a) => a.materiaPlanId === m.materiaPlanId)),
+          q,
+          (m) => `${m.codigo} ${m.nombre}`,
+        ).slice(0, 8);
 
   function agregar(m: MateriaSugerida) {
     setAgregadas((prev) => [...prev, m]);
