@@ -1,0 +1,105 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { esMarcadorDeElectiva, type Letra, type TipoPeriodo } from "@/lib/calculos";
+import CargaHistorial, { type MateriaPensum } from "./CargaHistorial";
+import type { CursoGuardado } from "../actions";
+
+export default async function CargarHistorialPage() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/");
+  }
+
+  const perfil = await prisma.perfilEstudiante.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, planId: true, universidadId: true, anioIngreso: true },
+  });
+  if (!perfil) {
+    redirect("/onboarding");
+  }
+
+  const materiasPlan = await prisma.materiaPlan.findMany({
+    where: { planId: perfil.planId },
+    select: {
+      id: true,
+      materiaId: true,
+      creditos: true,
+      fundamental: true,
+      anio: true,
+      periodo: true,
+      orden: true,
+      materia: { select: { codigo: true, nombre: true } },
+    },
+    orderBy: [{ anio: "asc" }, { orden: "asc" }],
+  });
+
+  const pensum: MateriaPensum[] = materiasPlan
+    .filter((mp) => !esMarcadorDeElectiva(mp.materia.codigo))
+    .map((mp) => ({
+      materiaPlanId: mp.id,
+      materiaId: mp.materiaId,
+      codigo: mp.materia.codigo,
+      nombre: mp.materia.nombre,
+      creditos: mp.creditos,
+      fundamental: mp.fundamental,
+      planAnio: mp.anio,
+      planPeriodo: mp.periodo,
+    }));
+
+  const totalCreditos = pensum.reduce((a, m) => a + m.creditos, 0);
+
+  const cursos = await prisma.curso.findMany({
+    where: { perfilId: perfil.id, estado: { in: ["APROBADO", "REPROBADO"] } },
+    select: {
+      id: true,
+      materiaId: true,
+      creditos: true,
+      fundamental: true,
+      notaFinal: true,
+      letraFinal: true,
+      estado: true,
+      periodo: { select: { anio: true, tipo: true } },
+    },
+  });
+  const cursosExistentes: CursoGuardado[] = cursos.map((c) => ({
+    id: c.id,
+    materiaId: c.materiaId,
+    creditos: c.creditos,
+    fundamental: c.fundamental,
+    notaFinal: c.notaFinal,
+    letra: c.notaFinal === null ? (c.letraFinal as Letra | null) : null,
+    estado: c.estado as "APROBADO" | "REPROBADO",
+    anio: c.periodo.anio,
+    tipo: c.periodo.tipo as TipoPeriodo,
+  }));
+
+  const profesores = (
+    await prisma.profesor.findMany({
+      where: { universidadId: perfil.universidadId },
+      select: { nombre: true },
+      orderBy: { nombre: "asc" },
+    })
+  ).map((p) => p.nombre);
+
+  return (
+    <section className="section_container max-w-2xl">
+      <Link href="/semestre" className="text-16-medium text-blue-800 underline">
+        ← Mi semestre
+      </Link>
+      <h1 className="text-30-bold mt-3 mb-1">Cargar mi historial</h1>
+      <p className="text-16-medium text-black-300 mb-8">
+        Marca lo que ya cursaste y su nota. Ajusta el periodo una vez por semestre; se guarda a
+        medida que avanzas.
+      </p>
+      <CargaHistorial
+        pensum={pensum}
+        cursosExistentes={cursosExistentes}
+        profesores={profesores}
+        anioIngreso={perfil.anioIngreso}
+        totalCreditos={totalCreditos}
+      />
+    </section>
+  );
+}
