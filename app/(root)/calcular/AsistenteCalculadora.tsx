@@ -237,23 +237,34 @@ function BarraPesos({
         </button>
       </div>
 
-      {/* Alternativa numérica (accesible) */}
-      <div className="grid grid-cols-2 gap-2 mt-3">
-        {porcentajes.map((p, i) => (
-          <label key={i} className="flex items-center gap-2 text-14-normal">
-            <span className="truncate flex-1">{nombres[i] || `Sección ${i + 1}`}</span>
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={p}
-              onChange={(e) => repartirDesde(i, Number(e.target.value))}
-              aria-label={`Peso de ${nombres[i] || `sección ${i + 1}`} en porcentaje`}
-              className="w-16 border border-black/15 rounded-lg px-2 py-1 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-            <span className="!text-black-300">%</span>
-          </label>
-        ))}
+      {/* Alternativa numérica: los porcentajes en una fila, alineados con la barra.
+          En móvil envuelven a dos columnas en vez de apilarse en una sola. */}
+      <div className="mt-4">
+        <p className="text-14-normal !text-black-300 font-semibold mb-2">O escribe los porcentajes directamente</p>
+        <div className="flex flex-wrap gap-2">
+          {porcentajes.map((p, i) => (
+            <div key={i} className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-0 min-w-[76px]">
+              <label htmlFor={`pct-${i}`} className="block text-[11px] !text-black-300 truncate mb-1">
+                {nombres[i] || `Sección ${i + 1}`}
+              </label>
+              <div className="relative">
+                <input
+                  id={`pct-${i}`}
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={p}
+                  onChange={(e) => repartirDesde(i, Number(e.target.value))}
+                  aria-label={`Peso de ${nombres[i] || `sección ${i + 1}`} en porcentaje`}
+                  className="w-full border border-black/15 rounded-lg pl-2 pr-6 py-1.5 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 !text-black-300 text-14-normal pointer-events-none">
+                  %
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
