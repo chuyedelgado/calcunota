@@ -8,6 +8,10 @@
     :root {
         --radius: 0.5rem;
     }
+    /* Fondo cálido (no blanco puro): da calidez y hace resaltar las tarjetas. */
+    body {
+        @apply bg-crema text-tinta;
+    }
 }
 
 @layer utilities {
@@ -169,8 +173,20 @@
         @apply w-full h-[164px] rounded-[10px] object-cover;
     }
 
+    /* Acción primaria: coral de acento (el verde queda para "asegurado/aprobado"). */
     .calcular_btn {
-        @apply  rounded-2xl bg-green-600 font-work-sans font-semibold text-[30px] text-white p-7 shadow-xl text-center !important;
+        @apply  rounded-2xl bg-primary font-work-sans font-semibold text-[30px] text-white p-7 shadow-hero text-center transition-transform duration-200 hover:-translate-y-0.5 !important;
+    }
+
+    /* Tarjetas con profundidad: sombra suave + hairline muy tenue de respaldo
+       (blanco sobre papel da poco contraste; la sombra sola no basta a plena luz). */
+    .tarjeta {
+        @apply bg-white rounded-2xl border border-hairline shadow-suave;
+    }
+    /* Tarjeta protagonista (dato grande): más elevación, SIN ciruela — el número
+       es dato, va en casi-negro; la ciruela se reserva para lo interactivo. */
+    .tarjeta-hero {
+        @apply bg-white rounded-2xl border border-hairline shadow-[0_12px_30px_-14px_rgba(42,36,31,0.26)];
     }
 
     .startup-card_skeleton {
@@ -239,4 +255,14 @@
 
 .w-md-editor-toolbar {
     padding: 10px !important;
+}
+
+/* Transición corta y sobria entre pasos del asistente. */
+@keyframes paso-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+.paso-anim { animation: paso-in 0.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+    .paso-anim { animation: none; }
 }
