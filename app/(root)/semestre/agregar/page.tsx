@@ -1,19 +1,14 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  esMarcadorDeElectiva,
-  nombrePeriodo,
-  parseAnioPeriodo,
-  parseTipoPeriodo,
-  periodoDeFecha,
-} from "@/lib/calculos";
+import { esMarcadorDeElectiva, nombrePeriodo, periodoDeFecha } from "@/lib/calculos";
 import AgregarMateriaForm, { type MateriaOpcion } from "./AgregarMateriaForm";
+import { parseAnioPeriodo, parseTipoPeriodo } from "../periodo";
 
 export default async function AgregarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ anio?: string; tipo?: string }>;
+  searchParams: Promise<{ anio?: string; tipo?: string; recuperar?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -83,7 +78,13 @@ export default async function AgregarPage({
       <p className="text-16-medium text-center text-black-100 mb-8">
         {nombrePeriodo(anio, tipo)}
       </p>
-      <AgregarMateriaForm materias={materias} profesores={profesores} anio={anio} tipo={tipo} />
+      <AgregarMateriaForm
+        materias={materias}
+        profesores={profesores}
+        anio={anio}
+        tipo={tipo}
+        recuperar={sp.recuperar === "1"}
+      />
     </section>
   );
 }

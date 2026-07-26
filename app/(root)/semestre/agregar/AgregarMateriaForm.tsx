@@ -1,16 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  esCalificable,
-  nombrePeriodo,
-  nombreTipoPeriodo,
-  validarSecciones,
-  type TipoPeriodo,
-} from "@/lib/calculos";
+import { esCalificable, nombrePeriodo, validarSecciones, type TipoPeriodo } from "@/lib/calculos";
 import { crearCurso, type EstadoCrearCurso } from "../actions";
+import { nombreTipoPeriodo } from "../periodo";
+import { CLAVE_MATERIA_PUBLICA } from "@/components/calculadora/tipos";
 
 export type MateriaOpcion = {
   id: string; // MateriaPlan.id
@@ -41,11 +37,13 @@ export default function AgregarMateriaForm({
   profesores,
   anio,
   tipo,
+  recuperar = false,
 }: {
   materias: MateriaOpcion[];
   profesores: string[];
   anio: number;
   tipo: TipoPeriodo;
+  recuperar?: boolean;
 }) {
   const [estado, formAction, pendiente] = useActionState<EstadoCrearCurso, FormData>(
     crearCurso,
@@ -54,6 +52,24 @@ export default function AgregarMateriaForm({
 
   const [materiaPlanId, setMateriaPlanId] = useState("");
   const [filas, setFilas] = useState<Fila[]>(PLANTILLA);
+
+  // Recuperación: precarga el esquema que el visitante armó sin cuenta (guardado
+  // en localStorage por la calculadora pública). Solo el esquema; las notas se
+  // capturan en la calculadora de la materia.
+  useEffect(() => {
+    if (!recuperar) return;
+    try {
+      const raw = window.localStorage.getItem(CLAVE_MATERIA_PUBLICA);
+      if (!raw) return;
+      const g = JSON.parse(raw) as { secciones?: { nombre: string; porcentaje: number; cantidad: number }[] };
+      if (g.secciones?.length) {
+        setFilas(g.secciones.map((s) => ({ nombre: s.nombre, porcentaje: s.porcentaje, cantidad: s.cantidad })));
+      }
+      window.localStorage.removeItem(CLAVE_MATERIA_PUBLICA);
+    } catch {
+      /* localStorage no disponible */
+    }
+  }, [recuperar]);
 
   const materia = materias.find((m) => m.id === materiaPlanId);
   const calificable = materia ? esCalificable(materia.creditos) : false;

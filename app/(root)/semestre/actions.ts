@@ -3,7 +3,16 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { esCalificable, parseTipoPeriodo, validarSecciones, type TipoPeriodo } from "@/lib/calculos";
+import {
+  APROBACION_NORMAL,
+  esCalificable,
+  notaALetra,
+  notaAPuntos,
+  validarSecciones,
+  type TipoPeriodo,
+} from "@/lib/calculos";
+import { calcularIndiceDesdeCursos } from "@/lib/indice";
+import { parseTipoPeriodo } from "./periodo";
 
 export type EstadoCrearCurso = { error?: string };
 
@@ -161,4 +170,190 @@ export async function crearCurso(
   }
 
   redirect(`/semestre?anio=${anio}&tipo=${tipo}`);
+}
+
+// ============================================================
+// Armar semestre: crea varios cursos EN_CURSO con esquema por defecto
+// ============================================================
+
+const ESQUEMA_DEFECTO = [
+  { nombre: "Parciales", porcentaje: 40, cantidad: 2 },
+  { nombre: "Talleres", porcentaje: 30, cantidad: 3 },
+  { nombre: "Examen final", porcentaje: 30, cantidad: 1 },
+];
+
+export async function crearSemestre(input: {
+  anio: number;
+  tipo: TipoPeriodo;
+  materiaPlanIds: string[];
+}): Promise<{ ok: boolean; error?: string }> {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/");
+  const perfil = await prisma.perfilEstudiante.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, planId: true },
+  });
+  if (!perfil) redirect("/onboarding");
+
+  const anioActual = new Date().getFullYear();
+  if (!Number.isInteger(input.anio) || input.anio < 1980 || input.anio > anioActual + 1) {
+    return { ok: false, error: "Año de periodo inválido." };
+  }
+  if (input.materiaPlanIds.length === 0) return { ok: false, error: "Marca al menos una materia." };
+
+  const periodo = await prisma.periodo.upsert({
+    where: { anio_tipo: { anio: input.anio, tipo: input.tipo } },
+    create: { anio: input.anio, tipo: input.tipo },
+    update: {},
+    select: { id: true },
+  });
+
+  for (const mpId of input.materiaPlanIds) {
+    const mp = await prisma.materiaPlan.findUnique({
+      where: { id: mpId },
+      select: { planId: true, materiaId: true, creditos: true, fundamental: true },
+    });
+    if (!mp || mp.planId !== perfil.planId) continue; // ignora lo que no es del plan
+
+    const previos = await prisma.curso.count({
+      where: { perfilId: perfil.id, materiaId: mp.materiaId },
+    });
+    const calificable = esCalificable(mp.creditos);
+
+    try {
+      await prisma.curso.create({
+        data: {
+          perfilId: perfil.id,
+          materiaId: mp.materiaId,
+          periodoId: periodo.id,
+          creditos: mp.creditos,
+          fundamental: mp.fundamental,
+          esRepeticion: previos > 0,
+          // Sin créditos: aprobada directa. Con créditos: en curso con esquema.
+          estado: calificable ? "EN_CURSO" : "APROBADO",
+          notaFinal: null,
+          ...(calificable
+            ? {
+                secciones: {
+                  create: ESQUEMA_DEFECTO.map((s, i) => ({
+                    nombre: s.nombre,
+                    porcentaje: s.porcentaje,
+                    cantidad: s.cantidad,
+                    orden: i + 1,
+                    notas: {
+                      create: Array.from({ length: s.cantidad }, (_, k) => ({
+                        orden: k + 1,
+                        puntaje: null,
+                        puntajeMax: 100,
+                      })),
+                    },
+                  })),
+                },
+              }
+            : {}),
+        },
+      });
+    } catch {
+      continue; // ya existe esa materia en el periodo
+    }
+  }
+
+  redirect(`/semestre?anio=${input.anio}&tipo=${input.tipo}`);
+}
+
+// ============================================================
+// Cierre de semestre completo
+// ============================================================
+
+export type CierreFila = { cursoId: string; notaFinal: number | null; retirar: boolean };
+
+export type ResumenSemestre = {
+  ok: boolean;
+  error?: string;
+  resumen?: { puntos: number; creditos: number; indicePeriodo: number; indiceAcumulado: number };
+};
+
+export async function cerrarSemestre(input: {
+  anio: number;
+  tipo: TipoPeriodo;
+  cierres: CierreFila[];
+}): Promise<ResumenSemestre> {
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false, error: "Sesión no válida." };
+  const perfil = await prisma.perfilEstudiante.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true },
+  });
+  if (!perfil) return { ok: false, error: "Sin perfil." };
+
+  const ids = input.cierres.map((c) => c.cursoId);
+  const cursos = await prisma.curso.findMany({
+    where: { id: { in: ids }, perfilId: perfil.id },
+    select: { id: true },
+  });
+  const validos = new Set(cursos.map((c) => c.id));
+
+  for (const c of input.cierres) {
+    if (!validos.has(c.cursoId)) return { ok: false, error: "Hay un curso que no es tuyo." };
+    if (!c.retirar) {
+      if (c.notaFinal === null || !Number.isFinite(c.notaFinal) || c.notaFinal < 0 || c.notaFinal > 100) {
+        return { ok: false, error: "Cada materia necesita una nota de 0 a 100, o marcarla como retirada." };
+      }
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const c of input.cierres) {
+      if (c.retirar) {
+        await tx.curso.update({
+          where: { id: c.cursoId },
+          data: { estado: "RETIRADO", notaFinal: null, letraFinal: null, puntos: null },
+        });
+      } else {
+        const nota = c.notaFinal as number;
+        await tx.curso.update({
+          where: { id: c.cursoId },
+          data: {
+            notaFinal: nota,
+            letraFinal: notaALetra(nota),
+            puntos: notaAPuntos(nota),
+            estado: nota >= APROBACION_NORMAL ? "APROBADO" : "REPROBADO",
+          },
+        });
+      }
+    }
+  });
+
+  // Índice derivado, recalculado al leer (no se persiste).
+  const cerrados = await prisma.curso.findMany({
+    where: { perfilId: perfil.id, notaFinal: { not: null } },
+    select: {
+      id: true,
+      materiaId: true,
+      creditos: true,
+      notaFinal: true,
+      periodo: { select: { anio: true, tipo: true } },
+    },
+  });
+  const todos = cerrados.map((c) => ({
+    id: c.id,
+    materiaId: c.materiaId,
+    creditos: c.creditos,
+    notaFinal: c.notaFinal,
+    periodo: { anio: c.periodo.anio, tipo: c.periodo.tipo as TipoPeriodo },
+  }));
+  const acumulado = calcularIndiceDesdeCursos(todos);
+  const delPeriodo = calcularIndiceDesdeCursos(
+    todos.filter((c) => c.periodo.anio === input.anio && c.periodo.tipo === input.tipo),
+  );
+
+  return {
+    ok: true,
+    resumen: {
+      puntos: delPeriodo.puntos,
+      creditos: delPeriodo.creditos,
+      indicePeriodo: delPeriodo.indice,
+      indiceAcumulado: acumulado.indice,
+    },
+  };
 }
