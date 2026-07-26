@@ -535,7 +535,7 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
                 <p className="text-[24px] font-bold tabular-nums mt-0.5">{fmt(estado.notaMaxima)}</p>
               </div>
               <div className="tarjeta p-3">
-                <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Promedio evaluado</p>
+                <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Promedio actual</p>
                 <p className="text-[24px] font-bold tabular-nums mt-0.5">
                   {estado.promedioParcial === null ? "—" : fmt(estado.promedioParcial)}
                 </p>
