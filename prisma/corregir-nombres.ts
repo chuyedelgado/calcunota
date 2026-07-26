@@ -103,23 +103,50 @@ async function main() {
   }
 
   // ---- Escritura ----
-  // Se hace en transacciones por lotes: son miles de filas y una sola
-  // transacción gigante puede agotar el tiempo de espera de Neon.
-  const LOTE = 200;
+  //
+  // NO se usa prisma.$transaction: con cientos de updates y la latencia hacia
+  // Neon se supera su timeout de 5s y todo hace rollback. Estas actualizaciones
+  // son independientes entre sí e idempotentes, así que no necesitan
+  // atomicidad: si el proceso se corta, basta con volver a correr el script.
+  //
+  // Se lanzan en tandas con concurrencia limitada para aprovechar el viaje de
+  // ida y vuelta sin abrir demasiadas conexiones a la vez.
+  const CONCURRENCIA = 15;
 
   async function aplicar<T extends { id: string; nuevo: string }>(
     etiqueta: string,
     filas: T[],
     actualizar: (id: string, nombre: string) => Promise<unknown>
   ) {
-    for (let i = 0; i < filas.length; i += LOTE) {
-      const lote = filas.slice(i, i + LOTE);
-      await prisma.$transaction(lote.map((f) => actualizar(f.id, f.nuevo) as never));
-      process.stdout.write(
-        `\r  ${etiqueta}: ${Math.min(i + LOTE, filas.length)}/${filas.length}`
+    if (filas.length === 0) return;
+    let hechos = 0;
+    const fallidos: { id: string; error: string }[] = [];
+
+    for (let i = 0; i < filas.length; i += CONCURRENCIA) {
+      const tanda = filas.slice(i, i + CONCURRENCIA);
+      const resultados = await Promise.allSettled(
+        tanda.map((f) => actualizar(f.id, f.nuevo))
       );
+      resultados.forEach((r, j) => {
+        if (r.status === "fulfilled") hechos++;
+        else
+          fallidos.push({
+            id: tanda[j].id,
+            error: r.reason instanceof Error ? r.reason.message : String(r.reason),
+          });
+      });
+      process.stdout.write(`\r  ${etiqueta}: ${hechos}/${filas.length}`);
     }
-    if (filas.length) process.stdout.write("\n");
+
+    process.stdout.write(`\r  ${etiqueta}: ${hechos}/${filas.length}\n`);
+
+    if (fallidos.length) {
+      console.log(`     ${fallidos.length} fallaron:`);
+      for (const f of fallidos.slice(0, 3)) {
+        console.log(`       ${f.id}: ${f.error.split("\n")[0]}`);
+      }
+      console.log("     Vuelve a correr el script para reintentarlos.");
+    }
   }
 
   await aplicar("materias", cambiosMateria, (id, nombre) =>

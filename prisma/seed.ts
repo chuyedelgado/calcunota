@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PrismaClient, Grado, TipoMateria, PeriodoPlan } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { tituloMateria } from "../lib/texto";
 
 // keepAlive y timeouts amplios: el seed mueve miles de filas y Neon
 // cierra conexiones ociosas con facilidad.
@@ -65,15 +66,6 @@ type PlanJson = {
 // ------------------------------------------------------------
 // Utilidades
 // ------------------------------------------------------------
-
-function titulo(texto: string): string {
-  return texto
-    .toLocaleLowerCase("es")
-    .split(" ")
-    .map((p) => (p.length <= 2 ? p : p.charAt(0).toLocaleUpperCase("es") + p.slice(1)))
-    .join(" ")
-    .trim();
-}
 
 function slug(archivo: string): string {
   return archivo
@@ -189,7 +181,7 @@ async function main() {
 
   // ---- Facultades ----
   console.log("3. Facultades");
-  const nombresFacultad = [...new Set(validos.map((p) => titulo(p.facultad!)))];
+  const nombresFacultad = [...new Set(validos.map((p) => tituloMateria(p.facultad!)))];
   await prisma.facultad.createMany({
     data: nombresFacultad.map((nombre) => ({ nombre, universidadId: utp.id })),
     skipDuplicates: true,
@@ -206,8 +198,8 @@ async function main() {
   console.log("4. Carreras");
   const carrerasUnicas = new Map<string, { nombre: string; grado: Grado; facultadId: string }>();
   for (const p of validos) {
-    const facultadId = facultades.get(titulo(p.facultad!))!;
-    const nombre = titulo(p.carrera!);
+    const facultadId = facultades.get(tituloMateria(p.facultad!))!;
+    const nombre = tituloMateria(p.carrera!);
     const grado = gradoDesde(p.carrera!);
     carrerasUnicas.set(`${facultadId}|${nombre}|${grado}`, { nombre, grado, facultadId });
   }
@@ -235,8 +227,8 @@ async function main() {
   }[] = [];
 
   for (const p of validos) {
-    const facultadId = facultades.get(titulo(p.facultad!))!;
-    const carreraId = carreras.get(`${facultadId}|${titulo(p.carrera!)}|${gradoDesde(p.carrera!)}`)!;
+    const facultadId = facultades.get(tituloMateria(p.facultad!))!;
+    const carreraId = carreras.get(`${facultadId}|${tituloMateria(p.carrera!)}|${gradoDesde(p.carrera!)}`)!;
     let version = versionBase(p.archivo);
     // Dos PDFs distintos pueden dar la misma carrera + año (ej. tendencias
     // de una misma licenciatura). Se desambigua con el nombre del archivo.
@@ -272,7 +264,7 @@ async function main() {
   const materiasUnicas = new Map<string, string>();
   for (const p of validos) {
     for (const f of [...p.materias, ...p.electivas]) {
-      if (!materiasUnicas.has(f.codigo)) materiasUnicas.set(f.codigo, titulo(f.nombre));
+      if (!materiasUnicas.has(f.codigo)) materiasUnicas.set(f.codigo, tituloMateria(f.nombre));
     }
   }
   await enLotes(
