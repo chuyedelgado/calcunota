@@ -33,9 +33,15 @@ LINEA_MATERIA = re.compile(
     r"(\*\*\s+)?"                # 3: marca de materia fundamental
     r"(?:(OP|EE)\s+)?"           # 4: optativa / electiva
     r"(.+?)\s+"                  # 5: nombre (perezoso)
-    r"(\d+)\s+"                  # 6: horas de clase
+    r"(\d+)\s+"                  # 6: horas de clase (puede ser el total del
+                                 #    curso: el técnico de aeronaves llega a 400)
     r"(\d+)(\$\$)?\s+"           # 7/8: horas de laboratorio (+ pago)
-    r"(\d+)"                     # 9: créditos
+    r"(\d{1,2})"                 # 9: créditos — acotado a 2 dígitos a propósito.
+                                 #    El máximo real en la UTP es 8. Sin este
+                                 #    límite, un código de asignatura de 4 dígitos
+                                 #    puede colarse como créditos y corromper el
+                                 #    plan en silencio. Con el límite, la línea
+                                 #    simplemente no casa y sale en el reporte.
     r"(?:\s+(.*))?$",            # 10: requisitos
     re.UNICODE,
 )
@@ -83,6 +89,10 @@ LINEA_ELECTIVA = re.compile(
 
 # AREA DE TELECOMUNICACIONES
 AREA_ELECTIVA = re.compile(r"^\s*[ÁA]REA\s+DE\s+(.+?)\s*$", re.UNICODE)
+
+TOTAL_CREDITOS = re.compile(
+    r"TOTAL\s+DE\s+CR[ÉE]DITOS?\s*:?\s*(\d{2,4})", re.UNICODE | re.IGNORECASE
+)
 
 FACULTAD = re.compile(r"FACULTAD:\s*(.+?)\s*$", re.UNICODE)
 CARRERA = re.compile(r"CARRERA:\s*(.+?)\s*$", re.UNICODE)
@@ -141,10 +151,43 @@ def parsear_requisitos(crudo: str | None) -> dict:
     return {"codigos": codigos, "texto": texto or None}
 
 
+def repartir_anio_sin_semestre(materias: list) -> int:
+    """
+    Desde 2025 los planes de ingeniería traen el primer año como "I AÑO", sin
+    dividir en semestres, porque es un año común de estudios generales. La
+    universidad igual lo dicta en dos semestres.
+
+    Se reparten en mitades siguiendo el orden del plan, que es el orden real de
+    cursado: la primera mitad al primer semestre y la segunda al segundo. El
+    orden del PDF lo confirma, porque las materias con prerequisitos del mismo
+    año siempre aparecen después de aquellas de las que dependen.
+
+    Las materias así asignadas quedan marcadas con periodoInferido=True para
+    poder distinguirlas de las que el plan sí especifica.
+    """
+    por_anio = {}
+    for m in materias:
+        if m["periodo"] is None and m["anio"] is not None:
+            por_anio.setdefault(m["anio"], []).append(m)
+
+    inferidas = 0
+    for _anio, grupo in por_anio.items():
+        if len(grupo) < 2:
+            continue  # una sola materia suelta: no hay nada que repartir
+        grupo.sort(key=lambda m: m["orden"])
+        corte = (len(grupo) + 1) // 2  # con 12 -> 6 y 6; con 11 -> 6 y 5
+        for i, m in enumerate(grupo):
+            m["periodo"] = "PRIMER_SEMESTRE" if i < corte else "SEGUNDO_SEMESTRE"
+            m["periodoInferido"] = True
+            inferidas += 1
+    return inferidas
+
+
 def parsear_pdf(ruta: Path) -> dict:
     facultad = None
     carrera = None
     materias = []
+    total_declarado = None
     electivas = []
     area_actual = None
     anio_actual = None
@@ -169,6 +212,11 @@ def parsear_pdf(ruta: Path) -> dict:
                     if m:
                         carrera = limpiar(m.group(1))
                         continue
+
+                if total_declarado is None:
+                    m = TOTAL_CREDITOS.search(sin_tildes(linea).upper())
+                    if m:
+                        total_declarado = int(m.group(1))
 
                 normalizada = sin_tildes(linea).upper()
 
@@ -237,6 +285,7 @@ def parsear_pdf(ruta: Path) -> dict:
                         "creditos": int(m.group(9)),
                         "anio": anio_actual,
                         "periodo": periodo_actual,
+                        "periodoInferido": False,
                         "requisitos": parsear_requisitos(m.group(10)),
                     })
                     continue
@@ -261,14 +310,22 @@ def parsear_pdf(ruta: Path) -> dict:
                 if not any(r in linea.upper() for r in RUIDO):
                     lineas_sin_reconocer.append(linea)
 
+    inferidas = repartir_anio_sin_semestre(materias)
+
     return {
         "archivo": ruta.name,
         "universidad": "UTP",
+        "periodosInferidos": inferidas,
         "facultad": facultad,
         "carrera": carrera,
         "materias": materias,
         "electivas": electivas,
         "totalCreditos": sum(m["creditos"] for m in materias),
+        "totalCreditosDeclarado": total_declarado,
+        "diferenciaCreditos": (
+            None if total_declarado is None
+            else sum(m["creditos"] for m in materias) - total_declarado
+        ),
         "lineasSinReconocer": lineas_sin_reconocer,
     }
 
@@ -296,13 +353,20 @@ def main() -> int:
             continue
         planes.append(plan)
         if args.reporte:
+            d = plan["diferenciaCreditos"]
+            marca = (
+                "  sin total impreso" if d is None
+                else ("" if d == 0 else f"  DESCUADRE {d:+d} (impreso {plan['totalCreditosDeclarado']})")
+            )
             print(
                 f"{pdf.name:<62} "
                 f"{len(plan['materias']):>3} materias  "
                 f"{plan['totalCreditos']:>4} cr  "
                 f"{sum(1 for m in plan['materias'] if m['fundamental']):>3} fund  "
                 f"{len(plan['electivas']):>3} elect  "
+                f"{plan['periodosInferidos']:>3} inferidos  "
                 f"{len(plan['lineasSinReconocer']):>3} sin reconocer"
+                + marca
             )
 
     Path(args.salida).write_text(
@@ -311,7 +375,23 @@ def main() -> int:
     )
 
     total_materias = sum(len(p["materias"]) for p in planes)
+    descuadres = [p for p in planes if p["diferenciaCreditos"] not in (0, None)]
+    sin_total = [p for p in planes if p["diferenciaCreditos"] is None]
+
     print(f"\n{len(planes)} planes · {total_materias} materias → {args.salida}")
+    print(
+        f"créditos verificados contra el total impreso: "
+        f"{len(planes) - len(descuadres) - len(sin_total)} cuadran, "
+        f"{len(descuadres)} descuadran, {len(sin_total)} sin total impreso"
+    )
+    if descuadres:
+        print("\nPlanes que NO cuadran (revisar antes de cargar):")
+        for p in sorted(descuadres, key=lambda x: -abs(x["diferenciaCreditos"])):
+            print(
+                f"  {p['archivo'][:56]:<56} calculado {p['totalCreditos']:>6} "
+                f"vs impreso {p['totalCreditosDeclarado']:>4}  "
+                f"({p['diferenciaCreditos']:+d})"
+            )
     return 0
 
 
