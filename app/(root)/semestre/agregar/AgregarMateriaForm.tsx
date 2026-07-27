@@ -32,8 +32,8 @@ const PLANTILLA: Fila[] = [
 ];
 
 const campo =
-  "w-full border-2 border-black rounded-lg px-4 py-3 bg-white text-black " +
-  "focus:outline-none focus:ring-2 focus:ring-blue-800 " +
+  "w-full bg-white border border-hairline rounded-xl px-4 py-3 text-tinta shadow-suave " +
+  "focus:outline-none focus:ring-2 focus:ring-primary/40 " +
   "disabled:opacity-50 disabled:cursor-not-allowed";
 
 export default function AgregarMateriaForm({
@@ -119,14 +119,17 @@ export default function AgregarMateriaForm({
   return (
     <form
       action={formAction}
-      className="max-w-2xl mx-auto bg-white border-2 border-black rounded-2xl shadow-xl p-6 sm:p-10 space-y-6"
+      className="max-w-2xl mx-auto tarjeta p-6 sm:p-8 space-y-6"
     >
       {/* Periodo destino (fijado desde /semestre) */}
       <input type="hidden" name="anio" value={anio} />
       <input type="hidden" name="tipo" value={tipo} />
-      <p className="text-16-medium">
-        Agregando a: <span className="font-semibold">{nombrePeriodo(anio, tipo)}</span>{" "}
-        <Link href={`/semestre?anio=${anio}&tipo=${tipo}`} className="text-blue-800 underline">
+      <p className="text-16-medium !text-black-300">
+        Agregando a <span className="font-semibold text-tinta">{nombrePeriodo(anio, tipo)}</span>{" "}
+        <Link
+          href={`/semestre?anio=${anio}&tipo=${tipo}`}
+          className="!text-primary-ink underline font-semibold"
+        >
           cambiar
         </Link>
       </p>
@@ -154,11 +157,11 @@ export default function AgregarMateriaForm({
 
       {/* Ficha de la materia elegida */}
       {materia && (
-        <div className="recuadro_paso !bg-gray-100 rounded-xl p-4 flex-col items-start gap-1">
-          <p className="text-16-medium">
+        <div className="bg-primary-100 rounded-xl p-4">
+          <p className="text-16-medium text-tinta">
             <span className="font-semibold">{materia.codigo}</span> · {materia.nombre}
           </p>
-          <p className="text-16-medium text-black-300">
+          <p className="text-14-normal !text-black-300 mt-0.5">
             {materia.creditos} créditos
             {posicionCurricular ? ` · ${posicionCurricular}` : ""}
             {materia.fundamental ? " · Fundamental" : ""}
@@ -188,8 +191,8 @@ export default function AgregarMateriaForm({
 
       {/* Esquema de evaluación: sólo si la materia tiene créditos */}
       {materia && !calificable && (
-        <div className="recuadro_paso !bg-gray-100 rounded-xl p-4 flex-col items-start">
-          <p className="text-16-medium">
+        <div className="bg-crema border border-hairline rounded-xl p-4">
+          <p className="text-16-medium text-tinta">
             Esta materia no tiene créditos (es un requisito). Se registrará como{" "}
             <span className="font-semibold">APROBADA</span>, sin notas.
           </p>
@@ -203,7 +206,7 @@ export default function AgregarMateriaForm({
             <button
               type="button"
               onClick={agregarFila}
-              className="text-16-medium font-semibold text-blue-800 underline"
+              className="text-16-medium font-semibold !text-primary-ink underline"
             >
               + Agregar sección
             </button>
@@ -246,7 +249,7 @@ export default function AgregarMateriaForm({
                 <button
                   type="button"
                   onClick={() => quitarFila(i)}
-                  className="text-16-medium font-semibold text-red-600 pb-3 px-1"
+                  className="text-16-medium font-semibold !text-rojo-fuerte pb-3 px-1"
                   aria-label="Eliminar sección"
                 >
                   ✕
@@ -258,7 +261,7 @@ export default function AgregarMateriaForm({
           {/* Feedback en vivo de la suma */}
           <p
             className={`text-16-medium font-semibold mt-3 ${
-              validacion.valido ? "text-green-700" : "text-red-600"
+              validacion.valido ? "!text-verde-fuerte" : "!text-rojo-fuerte"
             }`}
           >
             {validacion.valido
@@ -274,7 +277,7 @@ export default function AgregarMateriaForm({
       )}
 
       {estado?.error && (
-        <p className="text-red-600 text-16-medium font-semibold" role="alert">
+        <p className="!text-rojo-fuerte text-16-medium font-semibold" role="alert">
           {estado.error}
         </p>
       )}

@@ -114,10 +114,13 @@ export default async function AgregarPage({
 
   return (
     <section className="section_container">
-      <h1 className="text-30-bold text-center mb-2">Agregar materia</h1>
-      <p className="text-16-medium text-center text-black-100 mb-8">
-        {nombrePeriodo(anio, tipo)}
-      </p>
+      <header className="max-w-2xl mx-auto mb-6">
+        <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Mi semestre</p>
+        <h1 className="text-30-bold text-tinta mt-1">Agregar materia</h1>
+        <p className="text-16-medium !text-black-300 mt-1">
+          a <span className="font-semibold text-tinta">{nombrePeriodo(anio, tipo)}</span>
+        </p>
+      </header>
       <AgregarMateriaForm
         materias={materias}
         profesores={profesores}
