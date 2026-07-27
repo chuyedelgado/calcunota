@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Calculadora from "@/components/calculadora/Calculadora";
 import type { BorradorSeccion, NotaUI, SeccionUI } from "@/components/calculadora/tipos";
 import { actualizarNota, guardarEsquema } from "./actions";
+import AlertaGraduacion from "./AlertaGraduacion";
 import type { SeccionData } from "./tipos";
 
 type EstadoGuardado = "idle" | "guardando" | "guardado" | "error";
@@ -111,6 +112,7 @@ export default function CalculadoraMateria({
       onGuardarEsquema={onGuardarEsquema}
       antesDeGuardarEsquema={vaciarPendientes}
       indicador={indicador}
+      alertaGraduacion={<AlertaGraduacion secciones={secciones} fundamental={fundamental} />}
     />
   );
 }

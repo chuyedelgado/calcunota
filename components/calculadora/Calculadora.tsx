@@ -66,6 +66,7 @@ export default function Calculadora({
   onGuardarEsquema,
   antesDeGuardarEsquema,
   indicador,
+  alertaGraduacion,
 }: {
   secciones: SeccionUI[];
   fundamental: boolean;
@@ -73,6 +74,10 @@ export default function Calculadora({
   onGuardarEsquema: (borrador: BorradorSeccion[]) => Promise<{ ok: boolean; error?: string }>;
   antesDeGuardarEsquema?: () => Promise<void>;
   indicador?: ReactNode;
+  // Slot para la alerta de graduación del contexto de cuenta (/semestre). Si se
+  // pasa (aunque sea null), reemplaza la alerta interna "camino a una D", que
+  // solo se conserva para la calculadora pública /calcular.
+  alertaGraduacion?: ReactNode;
 }) {
   const [modo, setModo] = useState<"momento" | "lista">("momento");
   const [notaAbierta, setNotaAbierta] = useState<NotaRef | null>(null);
@@ -163,15 +168,17 @@ export default function Calculadora({
         </div>
       </div>
 
-      {caminoADFundamental && (
-        <div className="bg-ambar-suave border-2 border-ambar-fuerte/40 rounded-2xl p-5 shadow-suave">
-          <p className="text-20-medium font-bold !text-ambar-fuerte">⚠ Vas camino a una D</p>
-          <p className="text-16-medium mt-2">
-            Esta materia es fundamental. Con una D avanzas, pero necesitas al menos{" "}
-            <span className="font-bold">71 (C)</span> para graduarte con ella.
-          </p>
-        </div>
-      )}
+      {alertaGraduacion !== undefined
+        ? alertaGraduacion
+        : caminoADFundamental && (
+            <div className="bg-ambar-suave border-2 border-ambar-fuerte/40 rounded-2xl p-5 shadow-suave">
+              <p className="text-20-medium font-bold !text-ambar-fuerte">⚠ Vas camino a una D</p>
+              <p className="text-16-medium mt-2">
+                Esta materia es fundamental. Con una D avanzas, pero necesitas al menos{" "}
+                <span className="font-bold">71 (C)</span> para graduarte con ella.
+              </p>
+            </div>
+          )}
 
       <PanelObjetivo seccionesEval={seccionesEval} objetivoAprobar={objetivoAprobar} fundamental={fundamental} />
 
