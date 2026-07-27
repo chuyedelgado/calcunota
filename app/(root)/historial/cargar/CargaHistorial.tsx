@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -413,7 +414,11 @@ function Resumen({ cursos, totalCreditos }: { cursos: CursoGuardado[]; totalCred
       {dsRepetibles.length > 0 && (
         <p className="text-14-normal !text-black-300">
           Tienes {dsRepetibles.length} D repetible(s): al repetirlas, la D anterior sale de tu índice
-          y sube. El optimizador (próximamente) te dirá cuáles conviene repetir primero.
+          y sube. Míralas en el{" "}
+          <Link href="/carrera/repeticiones" className="!text-primary-ink underline font-semibold">
+            Optimizador de repeticiones
+          </Link>{" "}
+          para ver cuáles conviene repetir primero.
         </p>
       )}
     </div>
