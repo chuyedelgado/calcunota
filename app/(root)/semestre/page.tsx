@@ -92,9 +92,15 @@ export default async function SemestrePage({
   const hayEnCurso = enCursoDelPeriodo.length > 0;
   const historialVacio = cerradosDb.length === 0;
 
-  // Resumen del encabezado: lo que el usuario quiere ver al entrar.
-  const materiasActivas = enCursoDelPeriodo.length;
-  const creditosActivos = enCursoDelPeriodo.reduce((a, c) => a + c.creditos, 0);
+  // Resumen del encabezado. Son dos números distintos y ambos importan: los
+  // créditos EN CURSO (que calcularIndice ignora, por eso antes salía 0 en un
+  // periodo cerrado) y los ya aprobados de este periodo (los que cuentan para
+  // el índice). El índice acumulado es de carrera y sí excluye lo en curso.
+  const materiasDelPeriodo = cursos.length;
+  const creditosEnCurso = enCursoDelPeriodo.reduce((a, c) => a + c.creditos, 0);
+  const creditosAprobadosPeriodo = cursos
+    .filter((c) => c.estado === "APROBADO")
+    .reduce((a, c) => a + c.creditos, 0);
 
   // Resumen de carrera (para entre semestres).
   const indice = calcularIndiceDesdeCursos(
@@ -150,9 +156,10 @@ export default async function SemestrePage({
         </div>
 
         {/* Resumen: la razón por la que el usuario abre la app */}
-        <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
-          <ResumenDato valor={String(materiasActivas)} etiqueta={materiasActivas === 1 ? "materia activa" : "materias activas"} />
-          <ResumenDato valor={String(creditosActivos)} etiqueta="créditos" />
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <ResumenDato valor={String(materiasDelPeriodo)} etiqueta={materiasDelPeriodo === 1 ? "materia" : "materias"} />
+          <ResumenDato valor={String(creditosEnCurso)} etiqueta="créditos en curso" />
+          <ResumenDato valor={String(creditosAprobadosPeriodo)} etiqueta="créditos aprobados" />
           <ResumenDato valor={historialVacio ? "—" : indice.toFixed(2)} etiqueta="índice acumulado" />
         </div>
       </header>
