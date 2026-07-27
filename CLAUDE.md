@@ -50,12 +50,17 @@ lib/
   prisma.ts                         singleton del cliente
 prisma/
   schema.prisma
-  seed.ts                           carga escala UTP + 59 planes
-  verificar.ts                      18 comprobaciones post-seed
+  seed.ts                           carga escala UTP + 105 planes (usa tituloMateria)
+  verificar.ts                      comprobaciones post-seed (conteos derivados de planes.json)
+  marcar-vigencia.ts                marca el plan más nuevo de cada carrera como VIGENTE
+  corregir-nombres.ts               corrige capitalización de nombres ya guardados
+  fusionar-carreras.ts              fusiona filas de carrera duplicadas por nombre
+  nombres-carreras.json             overrides de nombre canónico para fusionar-carreras
 scraping_materias/
-  scrape_planes.py                  PDFs -> planes.json
+  scrape_planes.py                  PDFs -> planes.json (créditos acotados + validación)
   planes.json                       salida del scraper
-  planes_de_estudio/                59 PDFs de planes de la UTP
+  planes_de_estudio/                105 PDFs de planes de la UTP (viejos + oferta 2025)
+  pdfs-problematicos/               PDFs apartados (plantilla rota o duplicados)
 ```
 
 ## Reglas académicas de la UTP (fuente de verdad)
@@ -133,16 +138,27 @@ campo `secuencia`, que sale de ordenar los `Periodo` por año y tipo.
 
 ## Estado de la base
 
-Cargada y verificada con los 59 planes de la UTP:
+Cargada con los 105 planes de la UTP (59 previos + la oferta académica 2025):
 
 | Tabla | Filas |
 |---|---|
 | Facultad | 6 |
-| Carrera | 58 |
-| PlanEstudio | 59 |
-| Materia | 1,624 |
-| MateriaPlan | 3,318 |
-| Prerequisito | 2,394 |
+| Carrera | 64 |
+| PlanEstudio | 105 |
+| Materia | 2,014 |
+| MateriaPlan | 6,076 |
+| Prerequisito | 3,912 |
+
+Un plan se apartó a `pdfs-problematicos/` (Seguridad Industrial e Higiene
+Ocupacional 2025: PDF con plantilla distinta que el scraper parsea mal; la
+carrera queda cubierta por su plan 2024-2). La carrera queda con **una** fila por
+nombre: los planes viejo y nuevo de una misma carrera conviven como versiones
+(el más reciente marcado VIGENTE, los anteriores histórico).
+
+`verificar.ts` ya no tiene conteos fijos: los deriva de `planes.json`. Tras
+fusionar carreras, su chequeo de "Carreras" queda por debajo del conteo del JSON
+(la fusión es solo en base, no toca el JSON); la señal que importa es
+"Carreras sin nombres variantes" en 0.
 
 Cero prerequisitos huérfanos: el grafo está completo y sirve para proyectar el
 orden de materias de una carrera.
@@ -211,6 +227,23 @@ Regenerar los planes desde los PDFs:
 cd scraping_materias && source .venv/bin/activate
 python3 scrape_planes.py --entrada planes_de_estudio --salida planes.json --reporte
 ```
+
+Pipeline completo tras actualizar los PDFs (cada script simula sin `--aplicar`):
+
+```bash
+npx prisma db seed                        # createMany skipDuplicates: solo agrega
+npx tsx prisma/marcar-vigencia.ts --aplicar   # plan más nuevo por carrera = VIGENTE
+npx tsx prisma/fusionar-carreras.ts --aplicar # colapsa carreras duplicadas por nombre
+npx tsx prisma/marcar-vigencia.ts --aplicar   # obligatorio tras fusionar
+npx tsx prisma/corregir-nombres.ts --aplicar  # capitalización de nombres ya guardados
+npx tsx prisma/verificar.ts                   # confirma: 0 carreras con nombres variantes
+```
+
+Si `fusionar-carreras` elige un nombre canónico malo, editar
+`prisma/nombres-carreras.json` (`"CLAVE que imprime": "Nombre correcto"`) y
+re-simular. `lib/calculos.ts`, `lib/recomendaciones.ts`, `lib/texto.ts`,
+`scrape_planes.py`, `schema.prisma` y los scripts de `prisma/` son de solo
+lectura: si uno falla, se reporta y se espera versión corregida.
 
 ## Reglas de trabajo
 
