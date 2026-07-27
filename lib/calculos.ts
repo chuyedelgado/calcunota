@@ -40,10 +40,31 @@ export const APROBACION_FUNDAMENTAL = 71;
  * en cadena sobre las proyecciones, ver `techo()` más abajo.
  */
 export function notaARango(nota: number, escala: Rango[] = ESCALA_UTP): Rango {
-  const truncada = Math.min(100, Math.max(0, Math.floor(nota)));
+  const truncada = Math.min(100, Math.max(0, truncar(nota)));
   const rango = escala.find((r) => truncada >= r.desde && truncada <= r.hasta);
   if (!rango) throw new Error(`Nota fuera de escala: ${nota}`);
   return rango;
+}
+
+/**
+ * Trunca hacia abajo, absorbiendo el ruido de coma flotante.
+ *
+ * El épsilon no es cosmético: sin él, un cálculo que debería dar 91 pero que la
+ * aritmética de punto flotante deja en 90.99999999999999 se truncaría a 90, y el
+ * estudiante recibiría B en lugar de A. Con truncamiento, un error de una
+ * billonésima cuesta una letra completa.
+ */
+export function truncar(valor: number): number {
+  return Math.floor(valor + 1e-9);
+}
+
+/**
+ * Nota tal como debe mostrarse al estudiante: truncada y sin decimales, que es
+ * como la registra la UTP. Un 95.31 se muestra "95", y es también el valor del
+ * que sale su letra.
+ */
+export function formatearNota(nota: number): string {
+  return String(Math.min(100, Math.max(0, truncar(nota))));
 }
 
 /**

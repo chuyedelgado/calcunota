@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { notaALetra, type TipoPeriodo } from "@/lib/calculos";
+import { formatearNota, notaALetra, truncar, type TipoPeriodo } from "@/lib/calculos";
 import { cerrarSemestre, type ResumenSemestre } from "../actions";
 
 export type CursoAcerrar = {
@@ -17,10 +17,6 @@ export type CursoAcerrar = {
 
 type Fila = { notaStr: string; retirar: boolean };
 
-function truncar(n: number): number {
-  return Math.min(100, Math.max(0, Math.floor(n)));
-}
-
 export default function CerrarSemestreForm({
   cursos,
   anio,
@@ -31,7 +27,7 @@ export default function CerrarSemestreForm({
   tipo: TipoPeriodo;
 }) {
   const [filas, setFilas] = useState<Fila[]>(
-    cursos.map((c) => ({ notaStr: c.propuesta !== null ? String(c.propuesta) : "", retirar: false })),
+    cursos.map((c) => ({ notaStr: c.propuesta !== null ? formatearNota(c.propuesta) : "", retirar: false })),
   );
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");

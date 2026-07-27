@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
-import { calcularEstadoMateria, nombrePeriodo, periodoDeFecha, type Letra, type TipoPeriodo } from "@/lib/calculos";
+import { calcularEstadoMateria, formatearNota, periodoDeFecha, type Letra, type TipoPeriodo } from "@/lib/calculos";
 import { calcularIndiceDesdeCursos } from "@/lib/indice";
 import { generarRecomendaciones } from "@/lib/recomendaciones";
 import { cargarContextoEstudiante } from "@/lib/contextoEstudiante";
@@ -88,8 +88,13 @@ export default async function SemestrePage({
   });
   const recomendaciones = generarRecomendaciones(ctx);
 
-  const hayEnCurso = cursos.some((c) => c.estado === "EN_CURSO");
+  const enCursoDelPeriodo = cursos.filter((c) => c.estado === "EN_CURSO");
+  const hayEnCurso = enCursoDelPeriodo.length > 0;
   const historialVacio = cerradosDb.length === 0;
+
+  // Resumen del encabezado: lo que el usuario quiere ver al entrar.
+  const materiasActivas = enCursoDelPeriodo.length;
+  const creditosActivos = enCursoDelPeriodo.reduce((a, c) => a + c.creditos, 0);
 
   // Resumen de carrera (para entre semestres).
   const indice = calcularIndiceDesdeCursos(
@@ -102,28 +107,55 @@ export default async function SemestrePage({
       periodo: { anio: c.periodo.anio, tipo: c.periodo.tipo as TipoPeriodo },
     })),
   ).indice;
-  const creditosAprobados = cerradosDb
-    .filter((c) => c.estado === "APROBADO")
-    .reduce((a, c) => a + c.creditos, 0);
-  const avance = totalPlan > 0 ? Math.min(100, (creditosAprobados / totalPlan) * 100) : null;
+
+  // Periodos que ya tienen alguna materia cargada, para marcarlos en el selector.
+  const periodosConCursos = await prisma.curso.findMany({
+    where: { perfilId: perfil.id },
+    select: { periodo: { select: { anio: true, tipo: true } } },
+  });
+  const clavesConMaterias = [
+    ...new Set(periodosConCursos.map((c) => `${c.periodo.anio}:${c.periodo.tipo}`)),
+  ];
 
   const desde = Math.min(perfil.anioIngreso, anio, actual.anio);
   const periodos = periodosEnRango(desde, actual.anio + 1);
   const clave = `${anio}:${tipo}`;
+  const claveActual = `${actual.anio}:${actual.tipo}`;
   const query = `anio=${anio}&tipo=${tipo}`;
 
   return (
     <section className="section_container">
-      <h1 className="text-30-bold text-center mb-2">Mi semestre</h1>
-      <p className="text-16-medium text-center text-black-300 mb-2">{nombrePeriodo(anio, tipo)}</p>
-      <p className="text-center mb-8 flex flex-wrap justify-center gap-x-4 gap-y-1">
-        <Link href="/carrera" className="text-16-medium !text-primary-ink underline font-semibold">
-          Mi carrera
-        </Link>
-        <Link href="/historial/cargar" className="text-16-medium !text-primary-ink underline font-semibold">
-          Cargar mi historial
-        </Link>
-      </p>
+      {/* Encabezado: el periodo es el dato principal; "Mi semestre" es solo contexto.
+          El selector se ve como control; "Cargar historial" es una acción, no un título
+          ("Mi carrera" vive en la barra de navegación). */}
+      <header className="max-w-3xl mx-auto mb-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Mi semestre</p>
+            <div className="mt-1">
+              <PeriodoSelector
+                periodos={periodos}
+                clave={clave}
+                claveActual={claveActual}
+                clavesConMaterias={clavesConMaterias}
+              />
+            </div>
+          </div>
+          <Link
+            href="/historial/cargar"
+            className="shrink-0 text-14-normal font-semibold !text-primary-ink bg-primary-100 rounded-xl px-3 py-2 hover:bg-primary/15 transition-colors"
+          >
+            Cargar historial
+          </Link>
+        </div>
+
+        {/* Resumen: la razón por la que el usuario abre la app */}
+        <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+          <ResumenDato valor={String(materiasActivas)} etiqueta={materiasActivas === 1 ? "materia activa" : "materias activas"} />
+          <ResumenDato valor={String(creditosActivos)} etiqueta="créditos" />
+          <ResumenDato valor={historialVacio ? "—" : indice.toFixed(2)} etiqueta="índice acumulado" />
+        </div>
+      </header>
 
       <RecuperarBanner query={query} />
 
@@ -141,46 +173,21 @@ export default async function SemestrePage({
       {/* Recomendaciones basadas en tus datos reales */}
       <Recomendaciones recomendaciones={recomendaciones} />
 
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <PeriodoSelector periodos={periodos} clave={clave} />
-        <div className="flex flex-wrap gap-3">
+      {cursos.length > 0 && (
+        <div className="max-w-3xl mx-auto flex flex-wrap justify-end gap-3 mb-6">
           {hayEnCurso && (
             <Button asChild className="border-2 border-black/15 bg-white !text-tinta rounded-2xl !text-[18px] p-3 shadow-suave">
               <Link href={`/semestre/cerrar?${query}`}>Cerrar semestre</Link>
             </Button>
           )}
-          {cursos.length > 0 && (
-            <Button asChild className="calcular_btn !text-[18px] !p-3">
-              <Link href={`/semestre/agregar?${query}`}>Agregar materia</Link>
-            </Button>
-          )}
+          <Button asChild className="calcular_btn !text-[18px] !p-3">
+            <Link href={`/semestre/agregar?${query}`}>Agregar materia</Link>
+          </Button>
         </div>
-      </div>
+      )}
 
       {cursos.length === 0 ? (
         <div className="max-w-2xl mx-auto space-y-6">
-          {/* Entre semestres: resumen de desempeño antes de armar el siguiente */}
-          {!historialVacio && (
-            <div className="tarjeta-hero p-6">
-              <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300 text-center">Tu carrera hasta ahora</p>
-              <div className="grid grid-cols-3 gap-3 mt-3 text-center">
-                <div>
-                  <p className="text-[32px] font-extrabold tabular-nums text-tinta leading-none">{indice.toFixed(2)}</p>
-                  <p className="text-14-normal !text-black-300 mt-1">Índice</p>
-                </div>
-                <div>
-                  <p className="text-[32px] font-extrabold tabular-nums text-tinta leading-none">{creditosAprobados}</p>
-                  <p className="text-14-normal !text-black-300 mt-1">Créditos</p>
-                </div>
-                <div>
-                  <p className="text-[32px] font-extrabold tabular-nums text-tinta leading-none">
-                    {avance !== null ? `${avance.toFixed(0)}%` : "—"}
-                  </p>
-                  <p className="text-14-normal !text-black-300 mt-1">Avance</p>
-                </div>
-              </div>
-            </div>
-          )}
           <div className="tarjeta p-8 text-center">
             <p className="text-20-medium mb-6">Todavía no tienes materias en este periodo.</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -231,11 +238,11 @@ export default async function SemestrePage({
                             : "!text-rojo-fuerte bg-rojo-suave border-rojo-fuerte"
                         }`}
                       >
-                        {c.notaFinal ?? "—"} · {c.letraFinal}
+                        {c.notaFinal !== null ? formatearNota(c.notaFinal) : "—"} · {c.letraFinal}
                       </span>
                     ) : notaActual !== null ? (
                       <span className="text-16-medium font-bold tabular-nums bg-black/[0.05] rounded-full px-3 py-1 text-tinta">
-                        {notaActual.toFixed(1)}
+                        {formatearNota(notaActual)}
                         <span className="text-14-normal !text-black-300"> / 100</span>
                       </span>
                     ) : (
@@ -251,5 +258,16 @@ export default async function SemestrePage({
         </ul>
       )}
     </section>
+  );
+}
+
+// Dato compacto del resumen del encabezado. El número en casi-negro (tinta),
+// la etiqueta atenuada; números tabulares para que no bailen.
+function ResumenDato({ valor, etiqueta }: { valor: string; etiqueta: string }) {
+  return (
+    <div className="tarjeta px-3 py-2.5 text-center">
+      <p className="text-[22px] sm:text-[26px] font-extrabold tabular-nums text-tinta leading-none">{valor}</p>
+      <p className="text-[11px] sm:text-14-normal !text-black-300 mt-1 leading-tight">{etiqueta}</p>
+    </div>
   );
 }

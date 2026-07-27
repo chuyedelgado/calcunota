@@ -6,6 +6,7 @@ import {
   APROBACION_FUNDAMENTAL,
   APROBACION_NORMAL,
   calcularEstadoMateria,
+  formatearNota,
   nombreEvaluacion,
   notaALetra,
   proyectar,
@@ -20,7 +21,8 @@ const campo =
   "w-full border-2 border-black rounded-lg px-3 py-2 bg-white text-black " +
   "focus:outline-none focus:ring-2 focus:ring-blue-800";
 
-const fmt = (n: number) => n.toFixed(1);
+// Las notas se muestran truncadas a entero (la UTP trunca); nunca con decimales.
+const fmt = formatearNota;
 
 function toEval(secciones: SeccionUI[]): SeccionEvaluacion[] {
   return secciones.map((s) => ({
@@ -51,7 +53,7 @@ function NumeroAnimado({ from, to, duracion = 250 }: { from: number; to: number;
     raf = requestAnimationFrame(paso);
     return () => cancelAnimationFrame(raf);
   }, [from, to, duracion]);
-  return <>{v.toFixed(1)}</>;
+  return <>{formatearNota(v)}</>;
 }
 
 type NotaRef = { seccionId: string; notaId: string };

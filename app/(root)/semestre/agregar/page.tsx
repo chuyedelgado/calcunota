@@ -1,7 +1,13 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { esMarcadorDeElectiva, nombrePeriodo, periodoDeFecha } from "@/lib/calculos";
+import {
+  esMarcadorDeElectiva,
+  nombrePeriodo,
+  periodoDeFecha,
+  secuenciaDePeriodo,
+  type TipoPeriodo,
+} from "@/lib/calculos";
 import AgregarMateriaForm, { type MateriaOpcion } from "./AgregarMateriaForm";
 import { parseAnioPeriodo, parseTipoPeriodo } from "../periodo";
 
@@ -28,7 +34,7 @@ export default async function AgregarPage({
   const anio = sp.anio != null ? parseAnioPeriodo(sp.anio, actual.anio) : actual.anio;
   const tipo = sp.tipo != null ? parseTipoPeriodo(sp.tipo) : actual.tipo;
 
-  // Materias del plan del perfil, con el snapshot sugerido.
+  // Materias del plan del perfil, con el snapshot sugerido y sus prerequisitos.
   const materiasPlan = await prisma.materiaPlan.findMany({
     where: { planId: perfil.planId },
     select: {
@@ -39,9 +45,22 @@ export default async function AgregarPage({
       periodo: true,
       materiaId: true,
       materia: { select: { codigo: true, nombre: true } },
+      prerequisitos: {
+        select: { materiaRequeridaId: true, materiaRequerida: { select: { codigo: true } } },
+      },
     },
     orderBy: [{ anio: "asc" }, { orden: "asc" }],
   });
+
+  // Todos los cursos del perfil (cualquier periodo): dan el estado de cada
+  // materia respecto al estudiante (aprobada / en curso / pendiente) y qué
+  // prerequisitos tiene ya aprobados.
+  const cursosPerfil = await prisma.curso.findMany({
+    where: { perfilId: perfil.id },
+    select: { materiaId: true, estado: true },
+  });
+  const aprobadas = new Set(cursosPerfil.filter((c) => c.estado === "APROBADO").map((c) => c.materiaId));
+  const enCurso = new Set(cursosPerfil.filter((c) => c.estado === "EN_CURSO").map((c) => c.materiaId));
 
   // Materias que el perfil ya tiene en ESTE MISMO periodo (repetir en otro
   // periodo sí se permite; duplicar en el mismo, no).
@@ -50,6 +69,9 @@ export default async function AgregarPage({
     select: { materiaId: true },
   });
   const excluidas = new Set(yaEnPeriodo.map((c) => c.materiaId));
+
+  const estadoDe = (materiaId: string): MateriaOpcion["estado"] =>
+    aprobadas.has(materiaId) ? "aprobada" : enCurso.has(materiaId) ? "en_curso" : "pendiente";
 
   const materias: MateriaOpcion[] = materiasPlan
     .filter((mp) => !esMarcadorDeElectiva(mp.materia.codigo)) // huecos de electiva
@@ -62,7 +84,25 @@ export default async function AgregarPage({
       fundamental: mp.fundamental,
       anioSugerido: mp.anio,
       periodoSugerido: mp.periodo,
+      estado: estadoDe(mp.materiaId),
+      // Prerequisitos aún no aprobados: aviso suave, no bloquea.
+      faltanPrereqs: mp.prerequisitos
+        .filter((p) => !aprobadas.has(p.materiaRequeridaId))
+        .map((p) => p.materiaRequerida.codigo),
     }));
+
+  // Bloque sugerido: la posición curricular más temprana (Verano → 1er → 2do)
+  // que todavía tiene materias pendientes. Es el "siguiente paso" del plan.
+  let mejorSeq = Infinity;
+  let bloqueSugerido: string | null = null;
+  for (const m of materias) {
+    if (m.estado !== "pendiente" || m.anioSugerido == null || m.periodoSugerido == null) continue;
+    const seq = secuenciaDePeriodo(m.anioSugerido, m.periodoSugerido as TipoPeriodo);
+    if (seq < mejorSeq) {
+      mejorSeq = seq;
+      bloqueSugerido = `${m.anioSugerido}:${m.periodoSugerido}`;
+    }
+  }
 
   const profesores = (
     await prisma.profesor.findMany({
@@ -83,6 +123,7 @@ export default async function AgregarPage({
         profesores={profesores}
         anio={anio}
         tipo={tipo}
+        bloqueSugerido={bloqueSugerido}
         recuperar={sp.recuperar === "1"}
       />
     </section>

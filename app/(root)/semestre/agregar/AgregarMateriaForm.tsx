@@ -8,6 +8,7 @@ import { crearCurso, type EstadoCrearCurso } from "../actions";
 import { nombreTipoPeriodo } from "../periodo";
 import { CLAVE_MATERIA_PUBLICA } from "@/components/calculadora/tipos";
 import { normalizar } from "@/lib/texto";
+import SelectorMateria from "./SelectorMateria";
 
 export type MateriaOpcion = {
   id: string; // MateriaPlan.id
@@ -17,6 +18,8 @@ export type MateriaOpcion = {
   fundamental: boolean;
   anioSugerido: number | null;
   periodoSugerido: string | null;
+  estado: "aprobada" | "en_curso" | "pendiente";
+  faltanPrereqs: string[]; // códigos de prerequisitos no aprobados
 };
 
 type Fila = { nombre: string; porcentaje: number; cantidad: number };
@@ -38,12 +41,14 @@ export default function AgregarMateriaForm({
   profesores,
   anio,
   tipo,
+  bloqueSugerido = null,
   recuperar = false,
 }: {
   materias: MateriaOpcion[];
   profesores: string[];
   anio: number;
   tipo: TipoPeriodo;
+  bloqueSugerido?: string | null;
   recuperar?: boolean;
 }) {
   const [estado, formAction, pendiente] = useActionState<EstadoCrearCurso, FormData>(
@@ -128,28 +133,22 @@ export default function AgregarMateriaForm({
 
       {/* Materia */}
       <div>
-        <label htmlFor="materiaPlanId" className="block text-16-medium font-semibold mb-2">
-          Materia
-        </label>
-        <select
-          id="materiaPlanId"
-          name="materiaPlanId"
-          className={campo}
-          value={materiaPlanId}
-          onChange={(e) => setMateriaPlanId(e.target.value)}
-          required
-        >
-          <option value="">Selecciona una materia…</option>
-          {materias.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.codigo} · {m.nombre} ({m.creditos} cr.)
-            </option>
-          ))}
-        </select>
-        {materias.length === 0 && (
-          <p className="text-16-medium text-black-300 mt-2">
+        <label className="block text-16-medium font-semibold mb-2">Materia</label>
+        {materias.length === 0 ? (
+          <p className="text-16-medium text-black-300">
             No quedan materias del plan por agregar en este periodo.
           </p>
+        ) : (
+          <>
+            <SelectorMateria
+              materias={materias}
+              bloqueSugerido={bloqueSugerido}
+              value={materiaPlanId}
+              onChange={setMateriaPlanId}
+            />
+            {/* Valor real para el Server Action */}
+            <input type="hidden" name="materiaPlanId" value={materiaPlanId} />
+          </>
         )}
       </div>
 

@@ -4,19 +4,15 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   APROBACION_NORMAL,
+  formatearNota,
   notaALetra,
   notaAPuntos,
   secuenciaDePeriodo,
+  truncar,
   type TipoPeriodo,
 } from "@/lib/calculos";
 import { calcularIndiceDesdeCursos, type CursoParaIndice } from "@/lib/indice";
 import { cerrarCurso, prepararCierre, retirarCurso, type DatosCierre } from "./actions";
-
-// Solo para MOSTRAR el entero truncado (la UTP trunca). La letra y los puntos
-// se derivan siempre de notaALetra/notaAPuntos, nunca comparando rangos.
-function truncar(n: number): number {
-  return Math.min(100, Math.max(0, Math.floor(n)));
-}
 
 export default function CierreCurso({
   cursoId,
@@ -51,7 +47,7 @@ export default function CierreCurso({
       return;
     }
     setDatos(d);
-    setNotaStr(d.propuesta !== null ? String(d.propuesta) : "");
+    setNotaStr(d.propuesta !== null ? formatearNota(d.propuesta) : "");
     setProfesor("");
     setAbierto(true);
   }

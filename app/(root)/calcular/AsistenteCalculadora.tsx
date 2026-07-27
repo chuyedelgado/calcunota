@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   calcularEstadoMateria,
+  formatearNota,
   nombreEvaluacion,
   validarSecciones,
   type SeccionEvaluacion,
@@ -30,7 +31,8 @@ function toEval(secciones: SeccionUI[]): SeccionEvaluacion[] {
   }));
 }
 
-const fmt = (n: number) => n.toFixed(1);
+// Notas truncadas a entero (la UTP trunca); nunca con decimales.
+const fmt = formatearNota;
 
 // ---- Combobox: elegir de la lista o escribir libre ----
 function Combobox({

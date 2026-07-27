@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
-import { esCalificable, nombrePeriodo, type TipoPeriodo } from "@/lib/calculos";
+import { esCalificable, formatearNota, nombrePeriodo, type TipoPeriodo } from "@/lib/calculos";
 import CalculadoraMateria from "./CalculadoraMateria";
 import CierreCurso from "./CierreCurso";
 import { marcarAprobada, reabrirCurso } from "./actions";
@@ -117,7 +117,7 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
           ) : (
             <>
               <p className="text-30-bold leading-tight">
-                {curso.notaFinal !== null ? curso.notaFinal : "—"}
+                {curso.notaFinal !== null ? formatearNota(curso.notaFinal) : "—"}
                 {curso.letraFinal ? (
                   <span className="text-20-medium"> · {curso.letraFinal}</span>
                 ) : null}
