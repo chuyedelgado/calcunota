@@ -63,7 +63,19 @@ export type MateriaCerrada = {
 };
 
 export type ContextoEstudiante = {
+  /** Cursos con estado EN_CURSO en el periodo activo */
   enCurso: MateriaEnCurso[];
+  /**
+   * Total de cursos del periodo activo SIN importar su estado.
+   *
+   * Hace falta para distinguir dos situaciones que `enCurso` confunde: un
+   * estudiante que aún no ha agregado materias, y uno que ya cerró el semestre
+   * (sus cursos pasaron a APROBADO y `enCurso` quedó vacío). Sin esto, al
+   * cerrar el semestre la app le sugiere agregar materias que ya cursó.
+   *
+   * Si no se provee, se asume el largo de `enCurso`.
+   */
+  cursosPeriodoActual?: number;
   historial: MateriaCerrada[];
   /** Meta de índice acumulado, si la definió */
   indiceObjetivo: number | null;
@@ -575,16 +587,21 @@ function faltanDatos(ctx: ContextoEstudiante): Recomendacion[] {
     });
   }
 
-  if (ctx.enCurso.length === 0) {
+  const cursosDelPeriodo = ctx.cursosPeriodoActual ?? ctx.enCurso.length;
+
+  if (cursosDelPeriodo === 0) {
     out.push({
       id: "vacio-semestre",
       categoria: "vacio",
       severidad: "media",
       titulo: "Agrega las materias de este semestre",
       detalle: `Con tus materias cargadas puedes proyectar qué notas necesitas.`,
-      accion: { texto: "Agregar semestre", ruta: "/semestre/agregar" },
+      accion: { texto: "Agregar materias", ruta: "/semestre/nuevo" },
       peso: 74,
     });
+  } else if (ctx.enCurso.length === 0) {
+    // Tiene cursos en el periodo pero ninguno abierto: ya cerró el semestre.
+    // No hay nada que sugerir aquí; el resto del motor cubre lo demás.
   } else {
     const sinNotas = ctx.enCurso.filter((m) => !tieneNotas(m));
     if (sinNotas.length === ctx.enCurso.length) {

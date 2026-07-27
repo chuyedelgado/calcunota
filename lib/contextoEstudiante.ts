@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import type { Letra, TipoPeriodo } from "@/lib/calculos";
+import { periodoDeFecha, type Letra, type TipoPeriodo } from "@/lib/calculos";
 import type {
   ContextoEstudiante,
   MateriaCerrada,
@@ -74,6 +74,18 @@ export async function cargarContextoEstudiante(perfil: {
     })),
   }));
 
+  // Total de cursos del periodo activo, sin importar su estado. Distingue "aún
+  // no agregó materias" de "ya cerró el semestre" (sus cursos pasaron a APROBADO
+  // y enCurso quedó vacío). Sin esto, tras cerrar sugería agregar lo ya cursado.
+  const actual = periodoDeFecha();
+  const periodoActivo = await prisma.periodo.findUnique({
+    where: { anio_tipo: { anio: actual.anio, tipo: actual.tipo } },
+    select: { id: true },
+  });
+  const cursosPeriodoActual = periodoActivo
+    ? await prisma.curso.count({ where: { perfilId: perfil.id, periodoId: periodoActivo.id } })
+    : 0;
+
   const historial: MateriaCerrada[] = cerradosDb.map((c) => ({
     cursoId: c.id,
     materiaId: c.materiaId,
@@ -90,6 +102,7 @@ export async function cargarContextoEstudiante(perfil: {
 
   return {
     enCurso,
+    cursosPeriodoActual,
     historial,
     indiceObjetivo: perfil.indiceObjetivo,
     creditosPlan: perfil.creditosPlan,
