@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import {
   esMarcadorDeElectiva,
+  letraAPuntos,
   letraHabilitaGraduacion,
   nombrePeriodo,
   notaALetra,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/calculos";
 import { calcularIndiceDesdeCursos, type CursoParaIndice } from "@/lib/indice";
 import { proyectarObjetivoCarrera, referenciaLetra } from "@/lib/proyeccionCarrera";
+import Trayectoria, { type PeriodoTrayectoria } from "./Trayectoria";
 
 export default async function CarreraPage() {
   const session = await auth();
@@ -71,10 +73,10 @@ export default async function CarreraPage() {
   if (cerrados.length === 0) {
     return (
       <section className="section_container max-w-2xl">
-        <h1 className="text-30-bold mb-4">Mi carrera</h1>
-        <div className="border-4 border-black bg-primary-100 rounded-2xl p-6 shadow-xl text-center">
-          <p className="text-20-medium font-bold mb-2">Aún no ves tu carrera completa</p>
-          <p className="text-16-medium mb-6">
+        <h1 className="text-30-bold text-tinta mb-4">Mi carrera</h1>
+        <div className="tarjeta-hero p-7 text-center">
+          <p className="text-20-medium font-bold text-tinta mb-2">Aún no ves tu carrera completa</p>
+          <p className="text-16-medium !text-black-300 mb-6">
             Carga tu historial y en segundos verás tu índice acumulado real, tu avance y qué te falta
             para tu objetivo. Es lo que ninguna otra herramienta te da.
           </p>
@@ -148,7 +150,7 @@ export default async function CarreraPage() {
       );
     },
   );
-  const porPeriodo = clavesPeriodo.map((k) => {
+  const porPeriodo: PeriodoTrayectoria[] = clavesPeriodo.map((k, i, arr) => {
     const [anio, tipo] = k.split(":");
     const seq = secuenciaDePeriodo(Number(anio), tipo as TipoPeriodo);
     const delPeriodo = paraIndice.filter(
@@ -157,10 +159,53 @@ export default async function CarreraPage() {
     const hastaAqui = paraIndice.filter(
       (c) => secuenciaDePeriodo(c.periodo.anio, c.periodo.tipo) <= seq,
     );
+    const indice = calcularIndiceDesdeCursos(delPeriodo).indice;
+    const acumulado = calcularIndiceDesdeCursos(hastaAqui).indice;
+
+    // Tendencia del acumulado respecto al periodo anterior, para leer la
+    // trayectoria como progresión.
+    const prevKey = arr[i - 1];
+    let acumuladoPrev: number | null = null;
+    if (prevKey) {
+      const [pa, pt] = prevKey.split(":");
+      const seqPrev = secuenciaDePeriodo(Number(pa), pt as TipoPeriodo);
+      acumuladoPrev = calcularIndiceDesdeCursos(
+        paraIndice.filter((c) => secuenciaDePeriodo(c.periodo.anio, c.periodo.tipo) <= seqPrev),
+      ).indice;
+    }
+    const tendencia: PeriodoTrayectoria["tendencia"] =
+      acumuladoPrev === null
+        ? "inicio"
+        : acumulado > acumuladoPrev + 0.005
+          ? "sube"
+          : acumulado < acumuladoPrev - 0.005
+            ? "baja"
+            : "mantiene";
+
+    // Detalle: materias del periodo con su letra, créditos y puntos aportados.
+    const cursosDetalle = cerrados
+      .filter((c) => c.periodo.anio === Number(anio) && c.periodo.tipo === tipo)
+      .map((c) => {
+        const letra = letraEfectiva(c);
+        return {
+          id: c.id,
+          codigo: c.materia.codigo,
+          nombre: c.materia.nombre,
+          letra,
+          notaFinal: c.notaFinal,
+          creditos: c.creditos,
+          puntos: letra ? letraAPuntos(letra) * c.creditos : 0,
+          fundamentalD:
+            c.fundamental && c.estado === "APROBADO" && letra !== null && !letraHabilitaGraduacion(letra, true),
+        };
+      });
+
     return {
       etiqueta: nombrePeriodo(Number(anio), tipo as TipoPeriodo),
-      indice: calcularIndiceDesdeCursos(delPeriodo).indice,
-      acumulado: calcularIndiceDesdeCursos(hastaAqui).indice,
+      indice,
+      acumulado,
+      tendencia,
+      cursos: cursosDetalle,
     };
   });
 
@@ -226,101 +271,84 @@ export default async function CarreraPage() {
 
   return (
     <section className="section_container max-w-2xl">
-      <h1 className="text-30-bold mb-6">Mi carrera</h1>
+      <h1 className="text-30-bold text-tinta mb-6">Mi carrera</h1>
 
-      {/* 1. Índice acumulado — dato protagonista en casi-negro (no ciruela) */}
-      <div className="tarjeta-hero p-7 text-center">
+      {/* 1. Índice acumulado — protagonista absoluto, en casi-negro (no ciruela) */}
+      <div className="tarjeta-hero p-8 text-center">
         <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Índice acumulado</p>
-        <p className="text-[72px] leading-none font-extrabold tabular-nums my-2 text-tinta">
+        <p className="text-[72px] sm:text-[92px] leading-none font-extrabold tabular-nums my-3 text-tinta">
           {acumulado.indice.toFixed(2)}
         </p>
-        <p className="text-16-medium text-black-300 tabular-nums">
-          {acumulado.puntos} puntos / {acumulado.creditos} créditos
+        <p className="text-16-medium !text-black-300 tabular-nums">
+          {acumulado.puntos} puntos · {acumulado.creditos} créditos
         </p>
         {objetivo != null && (
-          <p className="text-16-medium mt-2">
-            Objetivo <span className="tabular-nums">{objetivo.toFixed(2)}</span> ·{" "}
+          <p className="inline-flex items-center gap-1.5 mt-4 text-16-medium bg-crema border border-hairline rounded-full px-4 py-1.5">
+            <span className="!text-black-300">Objetivo</span>
+            <span className="tabular-nums font-bold text-tinta">{objetivo.toFixed(2)}</span>
             {distancia != null && distancia > 0 ? (
-              <span className="tabular-nums">te faltan {distancia.toFixed(2)}</span>
+              <span className="tabular-nums !text-black-300">· te faltan {distancia.toFixed(2)}</span>
             ) : (
-              <span className="!text-verde-fuerte font-semibold">✓ ya lo alcanzaste</span>
+              <span className="!text-verde-fuerte font-semibold">· ✓ ya lo alcanzaste</span>
             )}
           </p>
         )}
       </div>
 
-      {/* 2. Avance de carrera */}
-      <div className="mt-8">
-        <h2 className="text-20-medium font-semibold mb-3">Avance de carrera</h2>
-        <div className="flex justify-between text-16-medium mb-2">
-          <span>
-            {creditosAprobados} / {totalPlan} créditos
-          </span>
-          <span className="font-semibold">{progreso.toFixed(0)}%</span>
-        </div>
-        <div className="h-4 bg-gray-200 rounded-full overflow-hidden mb-4">
-          <div className="h-full bg-blue-800 rounded-full" style={{ width: `${progreso}%` }} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Mini etiqueta="Aprobadas" valor={aprobadas.length} />
-          <Mini etiqueta="Reprobadas" valor={reprobadas.length} />
-          <Mini etiqueta="En curso" valor={enCurso.length} />
-          <Mini etiqueta="Pendientes" valor={pendientes.length} />
+      {/* 2. Avance de carrera — anillo + desglose */}
+      <div className="mt-10">
+        <h2 className="text-20-medium font-semibold text-tinta mb-4">Avance de carrera</h2>
+        <div className="tarjeta p-5 flex flex-col sm:flex-row items-center gap-6">
+          <AnilloAvance progreso={progreso} creditosAprobados={creditosAprobados} totalPlan={totalPlan} />
+          <div className="grid grid-cols-2 gap-3 w-full">
+            <Mini etiqueta="Aprobadas" valor={aprobadas.length} color="!text-verde-fuerte" />
+            <Mini etiqueta="En curso" valor={enCurso.length} />
+            <Mini etiqueta="Reprobadas" valor={reprobadas.length} color={reprobadas.length > 0 ? "!text-ambar-fuerte" : undefined} />
+            <Mini etiqueta="Pendientes" valor={pendientes.length} />
+          </div>
         </div>
       </div>
 
-      {/* 3. Índice por periodo */}
+      {/* 3. Trayectoria por periodo — progresión desplegable */}
       {porPeriodo.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-20-medium font-semibold mb-3">Trayectoria por periodo</h2>
-          <ul className="space-y-2">
-            {porPeriodo.map((p, i) => {
-              const prev = i > 0 ? porPeriodo[i - 1].acumulado : null;
-              const flecha =
-                prev === null ? "" : p.acumulado > prev + 0.005 ? "↑" : p.acumulado < prev - 0.005 ? "↓" : "→";
-              return (
-                <li
-                  key={p.etiqueta}
-                  className="border-2 border-black rounded-xl p-3 bg-white flex items-center justify-between"
-                >
-                  <span className="text-16-medium">{p.etiqueta}</span>
-                  <span className="text-16-medium">
-                    <span className="text-black-300">periodo </span>
-                    <span className="font-semibold">{p.indice.toFixed(2)}</span>
-                    <span className="text-black-300"> · acum </span>
-                    <span className="font-bold">{p.acumulado.toFixed(2)}</span> {flecha}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+        <div className="mt-10">
+          <h2 className="text-20-medium font-semibold text-tinta mb-4">Trayectoria por periodo</h2>
+          <Trayectoria periodos={porPeriodo} />
         </div>
       )}
 
       {/* 4. Proyección al objetivo */}
       {objetivo != null && proyeccion && (
-        <div className="mt-8">
-          <h2 className="text-20-medium font-semibold mb-3">Para llegar a {objetivo.toFixed(2)}</h2>
-          <div className="border-2 border-black rounded-2xl p-5 bg-white">
+        <div className="mt-10">
+          <h2 className="text-20-medium font-semibold text-tinta mb-4">Para llegar a {objetivo.toFixed(2)}</h2>
+          <div
+            className={`rounded-2xl p-5 shadow-suave border-2 ${
+              proyeccion.yaLogrado
+                ? "bg-verde-suave border-verde-fuerte/40"
+                : !proyeccion.alcanzable && proyeccion.creditosRestantes > 0
+                  ? "bg-ambar-suave border-ambar-fuerte/40"
+                  : "bg-white border-hairline"
+            }`}
+          >
             {proyeccion.yaLogrado ? (
-              <p className="text-16-medium font-semibold text-green-700">
-                Ya aseguraste tu objetivo: pase lo que pase en lo que falta, te gradúas con al menos{" "}
-                {objetivo.toFixed(2)}. 🎉
+              <p className="text-16-medium font-semibold !text-verde-fuerte">
+                🎉 Ya aseguraste tu objetivo: pase lo que pase en lo que falta, te gradúas con al menos{" "}
+                {objetivo.toFixed(2)}.
               </p>
             ) : proyeccion.creditosRestantes <= 0 ? (
-              <p className="text-16-medium">
+              <p className="text-16-medium text-tinta">
                 Ya cursaste todos los créditos del plan. Tu índice final es{" "}
                 <span className="font-bold">{proyeccion.indiceActual.toFixed(2)}</span>.
               </p>
             ) : proyeccion.alcanzable && proyeccion.puntosPromedioPorCredito != null ? (
-              <p className="text-16-medium">
+              <p className="text-16-medium text-tinta">
                 Para graduarte con {objetivo.toFixed(2)} necesitas promediar{" "}
                 <span className="font-bold">{referenciaLetra(proyeccion.puntosPromedioPorCredito)}</span>{" "}
                 ({proyeccion.puntosPromedioPorCredito.toFixed(2)} puntos por crédito) en los{" "}
                 <span className="font-bold">{proyeccion.creditosRestantes}</span> créditos que te quedan.
               </p>
             ) : (
-              <p className="text-16-medium">
+              <p className="text-16-medium !text-ambar-fuerte">
                 Ese objetivo ya no es alcanzable: aun sacando A en los {proyeccion.creditosRestantes}{" "}
                 créditos que faltan, tu índice máximo sería{" "}
                 <span className="font-bold">{proyeccion.indiceMaximoAlcanzable.toFixed(2)}</span>.
@@ -330,21 +358,26 @@ export default async function CarreraPage() {
         </div>
       )}
       {objetivo == null && (
-        <div className="mt-8 border-2 border-black rounded-2xl p-4 bg-white">
-          <p className="text-16-medium text-black-300">
-            No definiste un índice objetivo en tu perfil. Al hacerlo verás aquí qué necesitas para
-            llegar.
+        <div className="mt-10 tarjeta p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-16-medium !text-black-300">
+            No definiste un índice objetivo. Al hacerlo verás aquí qué necesitas para llegar.
           </p>
+          <Link
+            href="/perfil"
+            className="shrink-0 text-14-normal font-semibold !text-primary-ink bg-primary-100 rounded-xl px-4 py-2 hover:bg-primary/15 transition-colors"
+          >
+            Definir objetivo
+          </Link>
         </div>
       )}
 
-      {/* 5. Alertas de graduación */}
+      {/* 5. Alertas de graduación — lo más accionable, destacado */}
       {(fundamentalesConD.length > 0 || bloqueos.length > 0) && (
-        <div className="mt-8">
-          <h2 className="text-20-medium font-semibold mb-3">Alertas de graduación</h2>
+        <div className="mt-10">
+          <h2 className="text-20-medium font-semibold text-tinta mb-4">Alertas de graduación</h2>
           <div className="space-y-3">
             {fundamentalesConD.map(({ curso, sim }) => (
-              <div key={curso.id} className="bg-rojo-suave border-2 border-rojo-fuerte/40 rounded-2xl p-4 shadow-suave">
+              <div key={curso.id} className="bg-rojo-suave border-2 border-rojo-fuerte/40 rounded-2xl p-5 shadow-suave">
                 <p className="text-16-medium font-bold !text-rojo-fuerte">
                   ⚠ {curso.materia.codigo} · {curso.materia.nombre}: fundamental aprobada con D
                 </p>
@@ -357,7 +390,7 @@ export default async function CarreraPage() {
                     Repetirla sacando C subiría tu índice de {sim.antes.toFixed(2)} a{" "}
                     <span className="font-bold">{sim.despues.toFixed(2)}</span> (+
                     {sim.ganancia.toFixed(2)}).{" "}
-                    <Link href="/carrera/repeticiones" className="text-blue-800 underline">
+                    <Link href="/carrera/repeticiones" className="!text-primary-ink underline font-semibold">
                       ver en el optimizador
                     </Link>
                   </p>
@@ -366,11 +399,11 @@ export default async function CarreraPage() {
             ))}
 
             {bloqueos.map((b) => (
-              <div key={b.mp.materiaId} className="border-2 border-black bg-white rounded-2xl p-4">
-                <p className="text-16-medium font-semibold">
-                  {b.mp.materia.codigo} · {b.mp.materia.nombre}
+              <div key={b.mp.materiaId} className="bg-rojo-suave border-2 border-rojo-fuerte/40 rounded-2xl p-5 shadow-suave">
+                <p className="text-16-medium font-bold !text-rojo-fuerte">
+                  ⚠ {b.mp.materia.codigo} · {b.mp.materia.nombre}
                 </p>
-                <p className="text-14-normal !text-black-300 mt-1">
+                <p className="text-14-normal !text-black mt-1">
                   Fundamental {estadoMateria.get(b.mp.materiaId)?.estado === "reprobada" ? "reprobada" : "pendiente"}:
                   bloquea {b.dependientes} materia(s) que la tienen de prerequisito.
                 </p>
@@ -381,8 +414,10 @@ export default async function CarreraPage() {
       )}
 
       {hayRepetibles && (
-        <div className="mt-8 border-2 border-black rounded-2xl p-4 bg-white flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-16-medium">Mira qué debes y qué te conviene repetir, y simula tu índice.</p>
+        <div className="mt-10 tarjeta p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-16-medium text-tinta">
+            Mira qué debes y qué te conviene repetir, y simula tu índice.
+          </p>
           <Button asChild className="calcular_btn !text-[16px] !p-3 shrink-0">
             <Link href="/carrera/repeticiones">Optimizador de repeticiones</Link>
           </Button>
@@ -390,7 +425,7 @@ export default async function CarreraPage() {
       )}
 
       <p className="mt-10 text-center">
-        <Link href="/semestre" className="text-16-medium text-blue-800 underline">
+        <Link href="/semestre" className="text-16-medium !text-primary-ink underline font-semibold">
           Ir a mi semestre
         </Link>
       </p>
@@ -398,10 +433,50 @@ export default async function CarreraPage() {
   );
 }
 
-function Mini({ etiqueta, valor }: { etiqueta: string; valor: number }) {
+// Anillo de avance: créditos aprobados sobre el total del plan. Verde = aprobado
+// (semántico), pista en hairline. El dato va en casi-negro.
+function AnilloAvance({
+  progreso,
+  creditosAprobados,
+  totalPlan,
+}: {
+  progreso: number;
+  creditosAprobados: number;
+  totalPlan: number;
+}) {
+  const r = 52;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - Math.min(1, Math.max(0, progreso / 100)));
   return (
-    <div className="border-2 border-black rounded-xl p-3 bg-white text-center">
-      <p className="text-30-bold leading-tight">{valor}</p>
+    <div className="relative shrink-0" style={{ width: 132, height: 132 }}>
+      <svg width="132" height="132" viewBox="0 0 132 132" className="-rotate-90">
+        <circle cx="66" cy="66" r={r} fill="none" stroke="#E7E1D7" strokeWidth="12" />
+        <circle
+          cx="66"
+          cy="66"
+          r={r}
+          fill="none"
+          stroke="#1F6B47"
+          strokeWidth="12"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-30-bold leading-none tabular-nums text-tinta">{progreso.toFixed(0)}%</span>
+        <span className="text-14-normal !text-black-300 tabular-nums mt-1">
+          {creditosAprobados}/{totalPlan} cr
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Mini({ etiqueta, valor, color }: { etiqueta: string; valor: number; color?: string }) {
+  return (
+    <div className="bg-crema border border-hairline rounded-xl p-3 text-center">
+      <p className={`text-30-bold leading-tight tabular-nums ${color ?? "text-tinta"}`}>{valor}</p>
       <p className="text-14-normal !text-black-300">{etiqueta}</p>
     </div>
   );
