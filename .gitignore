@@ -43,6 +43,12 @@ __pycache__/
 # vercel
 .vercel
 
+# tooling de agentes / editores
+.agents/
+.claude/
+.windsurf/
+skills-lock.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
