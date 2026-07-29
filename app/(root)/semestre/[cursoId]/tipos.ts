@@ -16,4 +16,8 @@ export type SeccionData = {
   cantidad: number;
   orden: number;
   notas: NotaData[];
+  // Grupo con subsecciones (laboratorio): sin notas propias, con profesor
+  // opcional del bloque. El porcentaje de cada subsección es relativo al padre.
+  profesorNombre?: string | null;
+  subsecciones?: SeccionData[];
 };

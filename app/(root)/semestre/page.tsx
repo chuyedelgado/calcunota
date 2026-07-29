@@ -48,7 +48,21 @@ export default async function SemestrePage({
       materia: { select: { codigo: true, nombre: true } },
       profesor: { select: { nombre: true } },
       secciones: {
-        select: { nombre: true, porcentaje: true, cantidad: true, notas: { select: { puntaje: true, puntajeMax: true } } },
+        where: { seccionPadreId: null },
+        select: {
+          nombre: true,
+          porcentaje: true,
+          cantidad: true,
+          notas: { select: { puntaje: true, puntajeMax: true } },
+          subsecciones: {
+            select: {
+              nombre: true,
+              porcentaje: true,
+              cantidad: true,
+              notas: { select: { puntaje: true, puntajeMax: true } },
+            },
+          },
+        },
       },
     },
     orderBy: { materia: { codigo: "asc" } },
@@ -71,13 +85,29 @@ export default async function SemestrePage({
 
   const totalPlan = perfil.plan.totalCreditos;
 
+  // Árbol → forma del motor (aplana solo). Un laboratorio aporta sus subsecciones.
   const toEval = (secciones: (typeof cursos)[number]["secciones"]) =>
-    secciones.map((s) => ({
-      nombre: s.nombre,
-      porcentaje: s.porcentaje,
-      cantidad: s.cantidad,
-      notas: s.notas.map((n) => ({ puntaje: n.puntaje, puntajeMax: n.puntajeMax })),
-    }));
+    secciones.map((s) =>
+      s.subsecciones.length > 0
+        ? {
+            nombre: s.nombre,
+            porcentaje: s.porcentaje,
+            cantidad: 0,
+            notas: [],
+            subsecciones: s.subsecciones.map((sub) => ({
+              nombre: sub.nombre,
+              porcentaje: sub.porcentaje,
+              cantidad: sub.cantidad,
+              notas: sub.notas.map((n) => ({ puntaje: n.puntaje, puntajeMax: n.puntajeMax })),
+            })),
+          }
+        : {
+            nombre: s.nombre,
+            porcentaje: s.porcentaje,
+            cantidad: s.cantidad,
+            notas: s.notas.map((n) => ({ puntaje: n.puntaje, puntajeMax: n.puntajeMax })),
+          },
+    );
 
   // Recomendaciones basadas en los datos reales del estudiante. Vienen ya
   // ordenadas por prioridad; se respeta ese orden.

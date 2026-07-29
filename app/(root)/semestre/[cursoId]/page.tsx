@@ -40,6 +40,7 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
       periodo: { select: { anio: true, tipo: true } },
       profesor: { select: { nombre: true } },
       secciones: {
+        where: { seccionPadreId: null },
         orderBy: { orden: "asc" },
         select: {
           id: true,
@@ -47,9 +48,24 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
           porcentaje: true,
           cantidad: true,
           orden: true,
+          profesor: { select: { nombre: true } },
           notas: {
             orderBy: { orden: "asc" },
             select: { id: true, orden: true, descripcion: true, puntaje: true, puntajeMax: true },
+          },
+          subsecciones: {
+            orderBy: { orden: "asc" },
+            select: {
+              id: true,
+              nombre: true,
+              porcentaje: true,
+              cantidad: true,
+              orden: true,
+              notas: {
+                orderBy: { orden: "asc" },
+                select: { id: true, orden: true, descripcion: true, puntaje: true, puntajeMax: true },
+              },
+            },
           },
         },
       },
@@ -149,13 +165,37 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
     );
   }
 
+  // Árbol de secciones: raíces con sus subsecciones (laboratorio) y el profesor
+  // del bloque.
+  const seccionesIniciales: SeccionData[] = curso.secciones.map((s) => ({
+    id: s.id,
+    nombre: s.nombre,
+    porcentaje: s.porcentaje,
+    cantidad: s.cantidad,
+    orden: s.orden,
+    notas: s.notas,
+    ...(s.subsecciones.length > 0
+      ? {
+          profesorNombre: s.profesor?.nombre ?? null,
+          subsecciones: s.subsecciones.map((sub) => ({
+            id: sub.id,
+            nombre: sub.nombre,
+            porcentaje: sub.porcentaje,
+            cantidad: sub.cantidad,
+            orden: sub.orden,
+            notas: sub.notas,
+          })),
+        }
+      : {}),
+  }));
+
   return (
     <section className="section_container max-w-2xl">
       {encabezado}
       <CalculadoraMateria
         cursoId={curso.id}
         fundamental={curso.fundamental}
-        seccionesIniciales={curso.secciones as SeccionData[]}
+        seccionesIniciales={seccionesIniciales}
       />
       <div className="mt-8">
         <CierreCurso
