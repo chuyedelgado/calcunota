@@ -365,12 +365,54 @@ export type NotaEvaluacion = {
 
 export type SeccionEvaluacion = {
   nombre: string;
-  /** Porcentaje sobre 100 que aporta la sección a la nota final */
+  /**
+   * Porcentaje que aporta la sección. Si es una subsección, el porcentaje es
+   * RELATIVO a su sección padre: las subsecciones de un laboratorio del 25%
+   * suman 100 entre ellas, no 25.
+   */
   porcentaje: number;
   /** Cantidad total de notas previstas en la sección */
   cantidad: number;
   notas: NotaEvaluacion[];
+  /**
+   * Subsecciones. Se usa para casos como el laboratorio de Física o Química:
+   * el laboratorio vale 25% de la materia, lo imparte otro profesor, y ese 25%
+   * se reparte internamente entre parciales, informes, quices y asistencia.
+   *
+   * Una sección con subsecciones no tiene notas propias.
+   */
+  subsecciones?: SeccionEvaluacion[];
 };
+
+/**
+ * Convierte el árbol de secciones en una lista plana con pesos efectivos.
+ *
+ * El laboratorio de Física I (25% de la materia) con parciales al 35% interno
+ * produce una sección "Laboratorio · Parciales" con peso 8.75% de la nota final.
+ *
+ * Todo el motor trabaja sobre la lista aplanada, así que el anidamiento no
+ * cambia ninguna fórmula.
+ */
+export function aplanarSecciones(
+  secciones: SeccionEvaluacion[]
+): SeccionEvaluacion[] {
+  const salida: SeccionEvaluacion[] = [];
+  for (const s of secciones) {
+    if (s.subsecciones && s.subsecciones.length > 0) {
+      for (const sub of s.subsecciones) {
+        salida.push({
+          ...sub,
+          nombre: `${s.nombre} · ${sub.nombre}`,
+          porcentaje: (s.porcentaje * sub.porcentaje) / 100,
+          subsecciones: undefined,
+        });
+      }
+    } else {
+      salida.push(s);
+    }
+  }
+  return salida;
+}
 
 export type EstadoMateria = {
   /** Puntos ya asegurados sobre 100 */
@@ -388,20 +430,42 @@ function normalizar(nota: NotaEvaluacion): number {
   return (nota.puntaje! / nota.puntajeMax) * 100;
 }
 
-/** Verifica que los porcentajes sumen 100. Devuelve la diferencia. */
+/**
+ * Verifica que los porcentajes sumen 100, en el nivel principal y dentro de
+ * cada grupo de subsecciones. Un laboratorio del 25% debe tener sus propias
+ * subsecciones sumando 100 entre ellas.
+ */
 export function validarSecciones(secciones: SeccionEvaluacion[]): {
   valido: boolean;
   suma: number;
   diferencia: number;
+  /** Secciones cuyas subsecciones no suman 100 */
+  subseccionesInvalidas: { nombre: string; suma: number }[];
 } {
   const suma = secciones.reduce((acc, s) => acc + s.porcentaje, 0);
   const diferencia = Math.round((100 - suma) * 100) / 100;
-  return { valido: Math.abs(diferencia) < 0.01, suma, diferencia };
+
+  const subseccionesInvalidas: { nombre: string; suma: number }[] = [];
+  for (const s of secciones) {
+    if (!s.subsecciones || s.subsecciones.length === 0) continue;
+    const sumaSub = s.subsecciones.reduce((a, x) => a + x.porcentaje, 0);
+    if (Math.abs(100 - sumaSub) >= 0.01) {
+      subseccionesInvalidas.push({ nombre: s.nombre, suma: sumaSub });
+    }
+  }
+
+  return {
+    valido: Math.abs(diferencia) < 0.01 && subseccionesInvalidas.length === 0,
+    suma,
+    diferencia,
+    subseccionesInvalidas,
+  };
 }
 
 export function calcularEstadoMateria(
-  secciones: SeccionEvaluacion[]
+  seccionesEntrada: SeccionEvaluacion[]
 ): EstadoMateria {
+  const secciones = aplanarSecciones(seccionesEntrada);
   // Todo se trabaja en escala 0-100 sobre la nota final de la materia
   let notaActual = 0;
   let porcentajeRestante = 0;
@@ -496,9 +560,10 @@ export function proyectar(
 
 /** Proyecta contra los umbrales relevantes de la escala. */
 export function proyectarEscala(
-  secciones: SeccionEvaluacion[],
+  seccionesEntrada: SeccionEvaluacion[],
   fundamental: boolean
 ): Proyeccion[] {
+  const secciones = aplanarSecciones(seccionesEntrada);
   const objetivos = [
     fundamental ? APROBACION_FUNDAMENTAL : APROBACION_NORMAL, // aprobar
     71, // C
@@ -538,6 +603,13 @@ const SINGULARES: Record<string, string> = {
 };
 
 function singular(nombreSeccion: string): string {
+  // En nombres compuestos por anidamiento ("Laboratorio · Parciales") solo se
+  // singulariza el último segmento; el prefijo es contexto, no el sustantivo.
+  if (nombreSeccion.includes("·")) {
+    const partes = nombreSeccion.split("·");
+    const ultimo = partes.pop()!.trim();
+    return `${partes.join("·").trim()} · ${singular(ultimo)}`;
+  }
   const limpio = nombreSeccion.trim();
   const clave = limpio.toLocaleLowerCase("es");
 
@@ -620,9 +692,10 @@ function clasificar(meta: number, referencia: number): Exigencia {
  * propio. El resto del algoritmo no cambia.
  */
 export function distribuirObjetivo(
-  secciones: SeccionEvaluacion[],
+  seccionesEntrada: SeccionEvaluacion[],
   objetivo: number
 ): PlanObjetivo {
+  const secciones = aplanarSecciones(seccionesEntrada);
   const estado = calcularEstadoMateria(secciones);
   const faltante = objetivo - estado.notaActual;
 
@@ -747,18 +820,65 @@ export function distribuirObjetivo(
     libres = libres.filter((p) => !p.fijada);
   }
 
-  const alcanzable = true;
-  const metas: MetaEvaluacion[] = pendientes.map((p) => ({
-    seccionIndice: p.seccionIndice,
-    seccionNombre: p.seccionNombre,
-    orden: p.orden,
-    etiqueta: p.etiqueta,
-    peso: p.peso,
-    meta: techo(Math.min(100, p.meta)),
-    metaEnPuntaje: techo((Math.min(100, p.meta) / 100) * p.puntajeMax),
-    puntajeMax: p.puntajeMax,
-    referencia: Math.round(p.referencia * 10) / 10,
-    exigencia: clasificar(p.meta, p.referencia),
+  // ------------------------------------------------------------
+  // Conversión a metas ENTERAS
+  //
+  // Una nota no puede ser 62.5: se saca 62 o 63. Y como truncar dejaría al
+  // estudiante corto del objetivo, hay que subir. Pero subir todas las metas
+  // al entero siguiente pediría más de lo necesario, así que se reparte:
+  // se trunca cada una y luego se sube de a uno, empezando por las que quedaron
+  // más cerca del siguiente entero (método del mayor residuo), hasta alcanzar
+  // exactamente el objetivo.
+  //
+  // El entero va sobre el PUNTAJE REAL de cada evaluación: si el parcial es
+  // sobre 40, las notas posibles son 33 o 34, no 33.5.
+  // ------------------------------------------------------------
+
+  const enteros = pendientes.map((p) => {
+    const crudo = (Math.min(100, p.meta) / 100) * p.puntajeMax;
+    const base = Math.min(p.puntajeMax, Math.max(0, Math.floor(crudo + 1e-9)));
+    return { p, puntaje: base, residuo: crudo - base };
+  });
+
+  /** Cuánto aporta a la nota final el conjunto actual de metas enteras. */
+  const aporte = () =>
+    enteros.reduce(
+      (a, e) =>
+        a + (e.p.puntajeMax > 0 ? (e.puntaje / e.p.puntajeMax) * e.p.peso : 0),
+      0
+    );
+
+  // Sube de a un punto, priorizando el residuo mayor, hasta cubrir el faltante
+  const orden = [...enteros].sort((a, b) => b.residuo - a.residuo);
+  let vuelta = 0;
+  while (estado.notaActual + aporte() < objetivo - 1e-9) {
+    let subioAlguna = false;
+    for (const e of orden) {
+      if (e.puntaje >= e.p.puntajeMax) continue;
+      e.puntaje += 1;
+      subioAlguna = true;
+      if (estado.notaActual + aporte() >= objetivo - 1e-9) break;
+    }
+    if (!subioAlguna) break; // todas al máximo
+    if (++vuelta > 200) break; // guarda contra bucle infinito
+  }
+
+  const alcanzable = estado.notaActual + aporte() >= objetivo - 1e-9;
+
+  const metas: MetaEvaluacion[] = enteros.map((e) => ({
+    seccionIndice: e.p.seccionIndice,
+    seccionNombre: e.p.seccionNombre,
+    orden: e.p.orden,
+    etiqueta: e.p.etiqueta,
+    peso: e.p.peso,
+    meta: e.p.puntajeMax > 0 ? (e.puntaje / e.p.puntajeMax) * 100 : 0,
+    metaEnPuntaje: e.puntaje,
+    puntajeMax: e.p.puntajeMax,
+    referencia: Math.round(e.p.referencia * 10) / 10,
+    exigencia: clasificar(
+      e.p.puntajeMax > 0 ? (e.puntaje / e.p.puntajeMax) * 100 : 0,
+      e.p.referencia
+    ),
   }));
 
   return {
