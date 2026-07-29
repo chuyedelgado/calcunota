@@ -109,10 +109,13 @@ export default async function NuevoSemestrePage({
 
   return (
     <section className="section_container max-w-2xl">
-      <Link href={`/semestre?anio=${anio}&tipo=${tipo}`} className="text-16-medium text-blue-800 underline">
-        ← Mi semestre
+      <Link
+        href={`/semestre?anio=${anio}&tipo=${tipo}`}
+        className="inline-flex items-center gap-1.5 min-h-[44px] px-3.5 rounded-xl bg-primary-100 text-14-normal font-semibold !text-primary-ink hover:bg-primary/15 transition-colors"
+      >
+        <span aria-hidden="true">←</span> Volver a mi semestre
       </Link>
-      <h1 className="text-30-bold mt-3 mb-1">Arma tu semestre</h1>
+      <h1 className="text-30-bold mt-4 mb-1 text-tinta">Arma tu semestre</h1>
       <p className="text-16-medium text-black-300 mb-6">
         {nombrePeriodo(anio, tipo)} · te sugerimos {etiquetaGrupo} de tu plan. Quita lo que no lleves
         y agrega lo que falte.

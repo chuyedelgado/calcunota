@@ -69,14 +69,17 @@ export default async function CerrarSemestrePage({
 
   return (
     <section className="section_container max-w-2xl">
-      <Link href={`/semestre?anio=${anio}&tipo=${tipo}`} className="text-16-medium text-blue-800 underline">
-        ← Mi semestre
+      <Link
+        href={`/semestre?anio=${anio}&tipo=${tipo}`}
+        className="inline-flex items-center gap-1.5 min-h-[44px] px-3.5 rounded-xl bg-primary-100 text-14-normal font-semibold !text-primary-ink hover:bg-primary/15 transition-colors"
+      >
+        <span aria-hidden="true">←</span> Volver a mi semestre
       </Link>
-      <h1 className="text-30-bold mt-3 mb-1">Cerrar semestre</h1>
+      <h1 className="text-30-bold mt-4 mb-1 text-tinta">Cerrar semestre</h1>
       <p className="text-16-medium text-black-300 mb-8">{nombrePeriodo(anio, tipo)}</p>
 
       {items.length === 0 ? (
-        <div className="border-2 border-black rounded-2xl p-8 text-center">
+        <div className="tarjeta p-8 text-center">
           <p className="text-20-medium">No hay materias en curso en este periodo.</p>
         </div>
       ) : (

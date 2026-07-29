@@ -25,8 +25,8 @@ const GRADO_LABEL: Record<string, string> = {
 };
 
 const campo =
-  "w-full border-2 border-black rounded-lg px-4 py-3 bg-white text-black " +
-  "focus:outline-none focus:ring-2 focus:ring-blue-800 " +
+  "w-full border border-borde rounded-lg px-4 py-3 bg-superficie text-tinta " +
+  "focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60 " +
   "disabled:opacity-50 disabled:cursor-not-allowed";
 
 export default function OnboardingForm({
@@ -66,7 +66,7 @@ export default function OnboardingForm({
   }
 
   return (
-    <form action={formAction} className="max-w-2xl mx-auto bg-white border-2 border-black rounded-2xl shadow-xl p-6 sm:p-10 space-y-6">
+    <form action={formAction} className="max-w-2xl mx-auto tarjeta shadow-hero p-6 sm:p-10 space-y-6">
       {/* Facultad */}
       <div>
         <label htmlFor="facultadId" className="block text-16-medium font-semibold mb-2">
@@ -184,7 +184,7 @@ export default function OnboardingForm({
       </div>
 
       {estado?.error && (
-        <p className="text-red-600 text-16-medium font-semibold" role="alert">
+        <p className="!text-rojo-fuerte text-16-medium font-semibold" role="alert">
           {estado.error}
         </p>
       )}

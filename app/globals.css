@@ -16,8 +16,9 @@
 
 /* ============================================================
    CLASES DE COMPONENTE — patrones que se repiten en toda la app.
-   Todo sale de TOKENS (ciruela/papel + semánticos); ningún color
-   crudo (border-black, blue-800, green-600, gray-300, bg-secondary).
+   Todo sale de TOKENS (ciruela/papel + semánticos). Regla: ningún
+   componente escribe un color crudo (negros, azules, verdes o grises
+   de Tailwind); solo tokens o estas clases.
    ============================================================ */
 @layer components {
     /* Campo de formulario: superficie, borde de control, foco ciruela. */

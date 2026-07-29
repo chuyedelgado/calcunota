@@ -136,13 +136,13 @@ export default function CierreCurso({
       >
         {cargando ? "Preparando…" : "Cerrar materia"}
       </Button>
-      {error && !abierto && <p className="text-14-normal !text-red-600 mt-2">{error}</p>}
+      {error && !abierto && <p className="text-14-normal !text-rojo-fuerte mt-2">{error}</p>}
 
       {abierto && datos && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setAbierto(false)} />
-          <div className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-white border-t-4 sm:border-4 border-black rounded-t-3xl sm:rounded-3xl p-6">
-            <p className="text-24-black !p-0 !text-black">Cerrar materia</p>
+          <div className="absolute inset-0 bg-tinta/40" onClick={() => setAbierto(false)} />
+          <div className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-superficie border-t border-hairline sm:border sm:border-hairline rounded-t-3xl sm:rounded-3xl shadow-hero p-6">
+            <p className="text-24-black !p-0 !text-tinta">Cerrar materia</p>
 
             {datos.completa ? (
               <p className="text-14-normal !text-black-300 mt-1">
@@ -160,7 +160,7 @@ export default function CierreCurso({
               autoFocus
               type="number"
               inputMode="decimal"
-              className="w-32 text-30-bold border-2 border-black rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-800"
+              className="w-32 text-30-bold border border-borde rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60"
               value={notaStr}
               onChange={(e) => setNotaStr(e.target.value)}
               placeholder="—"
@@ -185,8 +185,8 @@ export default function CierreCurso({
 
                 {/* Fundamental + D */}
                 {fundamental && vista.esD && (
-                  <div className="border-4 border-black bg-secondary rounded-xl p-4">
-                    <p className="text-16-medium font-bold">
+                  <div className="bg-ambar-suave border border-ambar-fuerte/30 rounded-xl p-4">
+                    <p className="text-16-medium font-bold !text-ambar-fuerte">
                       Con esta D avanzas a las materias que la tienen de requisito, pero al ser
                       fundamental no puedes graduarte con ella hasta subirla a C.
                     </p>
@@ -195,8 +195,8 @@ export default function CierreCurso({
 
                 {/* Efecto en el índice */}
                 {vista.dPrevia ? (
-                  <div className="border-4 border-black bg-primary-100 rounded-xl p-4">
-                    <p className="text-16-medium font-bold">
+                  <div className="bg-verde-suave border border-verde-fuerte/30 rounded-xl p-4">
+                    <p className="text-16-medium font-bold !text-verde-fuerte">
                       Cerrar esta materia elimina la D de {vista.dPrevia.periodoLabel} de tu índice:
                       sube de {vista.antes.toFixed(2)} a {vista.despues.toFixed(2)}.
                     </p>
@@ -217,7 +217,7 @@ export default function CierreCurso({
                   Profesor <span className="text-black-300 font-normal">(opcional)</span>
                 </label>
                 <input
-                  className="w-full border-2 border-black rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-800"
+                  className="w-full border border-borde rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60"
                   list="lista-profesores-cierre"
                   placeholder="¿Quién te dio la materia?"
                   value={profesor}
@@ -232,13 +232,13 @@ export default function CierreCurso({
               </div>
             )}
 
-            {error && <p className="text-14-normal !text-red-600 mt-3">{error}</p>}
+            {error && <p className="text-14-normal !text-rojo-fuerte mt-3">{error}</p>}
 
             <div className="flex gap-3 mt-6">
               <button
                 type="button"
                 onClick={() => setAbierto(false)}
-                className="flex-1 border-2 border-black rounded-xl py-3 text-16-medium font-semibold"
+                className="flex-1 border-2 border-borde !text-tinta bg-superficie rounded-xl py-3 text-16-medium font-semibold hover:border-primary/40 transition-colors"
               >
                 Cancelar
               </button>
@@ -256,7 +256,7 @@ export default function CierreCurso({
               type="button"
               onClick={retirar}
               disabled={enviando}
-              className="w-full text-14-normal !text-red-600 underline mt-4"
+              className="w-full text-14-normal !text-rojo-fuerte underline mt-4"
             >
               Retirar la materia (sin nota)
             </button>

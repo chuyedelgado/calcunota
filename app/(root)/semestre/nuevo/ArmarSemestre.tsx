@@ -76,9 +76,9 @@ export default function ArmarSemestre({
           return (
             <label
               key={m.materiaPlanId}
-              className="border-2 border-black rounded-2xl p-4 bg-white flex items-start gap-3 cursor-pointer"
+              className="tarjeta p-4 flex items-start gap-3 cursor-pointer"
             >
-              <input type="checkbox" className="mt-1" checked={marcada} onChange={() => toggle(m.materiaPlanId)} />
+              <input type="checkbox" className="mt-1 accent-primary w-4 h-4" checked={marcada} onChange={() => toggle(m.materiaPlanId)} />
               <div className="min-w-0">
                 <p className="text-16-medium font-semibold">
                   {m.codigo} · {m.nombre}
@@ -104,16 +104,16 @@ export default function ArmarSemestre({
       </div>
 
       {/* Agregar otras (repeticiones, adelantos, electivas) */}
-      <div className="border-2 border-black rounded-2xl p-4 bg-white">
+      <div className="tarjeta p-4">
         <p className="text-16-medium font-semibold mb-2">Agregar otra materia del plan</p>
         <input
-          className="w-full border-2 border-black rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-800"
+          className="w-full border border-borde rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60"
           placeholder="Código o nombre…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         {resultados.length > 0 && (
-          <ul className="mt-2 border-2 border-black rounded-lg divide-y divide-gray-200 max-h-56 overflow-y-auto">
+          <ul className="mt-2 border border-borde rounded-lg divide-y divide-hairline bg-superficie max-h-56 overflow-y-auto">
             {resultados.map((m) => (
               <li key={m.materiaPlanId}>
                 <button

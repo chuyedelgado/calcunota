@@ -63,8 +63,8 @@ export default function CerrarSemestreForm({
   if (resumen) {
     return (
       <div className="space-y-6">
-        <div className="border-4 border-black bg-primary-100 rounded-2xl p-6 shadow-xl">
-          <p className="text-24-black !p-0 !text-black">Semestre cerrado ✓</p>
+        <div className="bg-primary-100 border border-primary/20 rounded-2xl p-6 shadow-suave">
+          <p className="text-24-black !p-0 !text-tinta">Semestre cerrado ✓</p>
           <div className="grid grid-cols-2 gap-3 mt-4">
             <Dato etiqueta="Puntos" valor={resumen.puntos.toFixed(1)} />
             <Dato etiqueta="Créditos" valor={String(resumen.creditos)} />
@@ -91,7 +91,7 @@ export default function CerrarSemestreForm({
           const n = Number(f.notaStr);
           const notaOk = f.notaStr.trim() !== "" && Number.isFinite(n) && n >= 0 && n <= 100;
           return (
-            <div key={c.id} className="border-2 border-black rounded-2xl p-4 bg-white">
+            <div key={c.id} className="tarjeta p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-16-medium font-semibold truncate">{c.nombre}</p>
@@ -104,7 +104,7 @@ export default function CerrarSemestreForm({
                     type="number"
                     inputMode="decimal"
                     disabled={f.retirar}
-                    className="w-20 border-2 border-black rounded-lg px-2 py-2 text-16-medium disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-blue-800"
+                    className="w-20 border border-borde rounded-lg px-2 py-2 text-16-medium disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60"
                     placeholder="—"
                     value={f.notaStr}
                     min={0}
@@ -138,7 +138,7 @@ export default function CerrarSemestreForm({
         })}
       </div>
 
-      {error && <p className="text-14-normal !text-red-600">{error}</p>}
+      {error && <p className="text-14-normal !text-rojo-fuerte">{error}</p>}
 
       <Button
         type="button"
@@ -154,7 +154,7 @@ export default function CerrarSemestreForm({
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
-    <div className="border-2 border-black rounded-xl p-3 bg-white">
+    <div className="tarjeta p-3">
       <p className="text-14-normal !text-black-300">{etiqueta}</p>
       <p className="text-30-bold leading-tight">{valor}</p>
     </div>
