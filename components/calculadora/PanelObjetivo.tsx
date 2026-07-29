@@ -250,13 +250,13 @@ export default function PanelObjetivo({
           </div>
 
           {!plan.alcanzable ? (
-            <div className="border-2 border-rojo-fuerte/40 bg-rojo-suave rounded-2xl p-4 space-y-3">
-              <p className="text-16-medium">⚠ {plan.mensaje}</p>
+            <div className="border border-rojo-fuerte/40 bg-rojo-suave rounded-xl px-3 py-2.5 space-y-2">
+              <p className="text-14-normal">⚠ {plan.mensaje}</p>
               {puedeSugerir && rangoTecho && (
                 <button
                   type="button"
                   onClick={aplicarSugerencia}
-                  className="calcular_btn !text-16-medium !py-2.5 !px-4"
+                  className="inline-flex items-center rounded-full border border-rojo-fuerte/50 bg-white px-3 py-1 text-[13px] font-semibold !text-rojo-fuerte hover:bg-white/70"
                 >
                   Con esas notas, tu meta realista es {notaALetra(plan.techoAlcanzable)} — usar {rangoTecho.desde}
                 </button>
