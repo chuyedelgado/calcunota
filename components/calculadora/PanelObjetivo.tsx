@@ -35,6 +35,8 @@ type Edicion = {
   seccionIndice: number;
   orden: number;
   puntajeMax: number;
+  // Cómo estaba la meta antes de enfocarla, para que Escape la restaure.
+  previaFijada: number | null;
 };
 
 // Selector de objetivo + proyección detallada por evaluación. Compartido por la
@@ -72,72 +74,151 @@ export default function PanelObjetivo({
   // las demás. Se conservan al cambiar de objetivo (una nota fija no depende de
   // la meta global).
   const [fijadas, setFijadas] = useState<MetaFijada[]>([]);
-  // Texto en curso del campo que se está editando, para no recalcular en cada
-  // tecla (debounce) ni hacer que el input "salte".
+  // Mientras un campo tiene el foco, su valor sale de este texto local, NO del
+  // plan calculado: así el recálculo no pisa lo que se está escribiendo.
   const [edicion, setEdicion] = useState<Edicion | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Silencia la advertencia de objetivo imposible mientras se teclea.
+  const [advCallada, setAdvCallada] = useState(false);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  // Espejo síncrono de `edicion`: los handlers (blur tras Enter/Escape) lo leen
+  // sin depender de que el estado ya se haya vuelto a renderizar.
+  const edicionRef = useRef<Edicion | null>(null);
+  useEffect(() => { edicionRef.current = edicion; }, [edicion]);
+
+  // Tres tiempos distintos, no un solo debounce:
+  //  · el campo editado se actualiza al instante (sin timer)
+  //  · las OTRAS metas se recalculan ~400 ms tras la última tecla
+  //  · la advertencia aparece ~1 s tras la última tecla (o al salir/Enter)
+  const tRecalc = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tAdv = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (tRecalc.current) clearTimeout(tRecalc.current);
+      if (tAdv.current) clearTimeout(tAdv.current);
+    },
+    [],
+  );
 
   const plan = distribuirObjetivo(seccionesEval, objetivo, fijadas);
 
-  function commitEdicion(ed: Edicion) {
-    const sinEsta = (prev: MetaFijada[]) =>
-      prev.filter((f) => !(f.seccionIndice === ed.seccionIndice && f.orden === ed.orden));
-    if (ed.texto === "") {
-      // Vaciar el campo libera la meta: vuelve al reparto automático.
-      setFijadas(sinEsta);
-      return;
-    }
-    const puntaje = Math.max(0, Math.min(ed.puntajeMax, parseInt(ed.texto, 10) || 0));
-    setFijadas((prev) => [...sinEsta(prev), { seccionIndice: ed.seccionIndice, orden: ed.orden, puntaje }]);
+  function upsertFijada(seccionIndice: number, orden: number, puntaje: number) {
+    setFijadas((prev) => [
+      ...prev.filter((f) => !(f.seccionIndice === seccionIndice && f.orden === orden)),
+      { seccionIndice, orden, puntaje },
+    ]);
+  }
+  function quitarFijada(seccionIndice: number, orden: number) {
+    setFijadas((prev) => prev.filter((f) => !(f.seccionIndice === seccionIndice && f.orden === orden)));
   }
 
-  function editar(m: MetaEvaluacion, raw: string) {
-    // Cambiar de campo confirma lo que quedó pendiente en el anterior.
-    if (edicion && edicion.clave !== claveMeta(m)) commitEdicion(edicion);
-    // Solo enteros; se acota a [0, puntajeMax] en vivo.
-    let limpio = raw.replace(/\D/g, "");
-    if (limpio !== "") limpio = String(Math.min(m.puntajeMax, parseInt(limpio, 10)));
+  // (C) Enfocar: el campo pasa a estado local y se selecciona todo, para que
+  // escribir reemplace sin borrar.
+  function iniciarEdicion(m: MetaEvaluacion) {
+    const previa = fijadas.find((f) => f.seccionIndice === m.seccionIndice && f.orden === m.orden);
     const ed: Edicion = {
       clave: claveMeta(m),
-      texto: limpio,
+      texto: String(m.metaEnPuntaje),
       seccionIndice: m.seccionIndice,
       orden: m.orden,
       puntajeMax: m.puntajeMax,
+      previaFijada: previa ? previa.puntaje : null,
     };
+    edicionRef.current = ed;
     setEdicion(ed);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      commitEdicion(ed);
-      setEdicion((cur) => (cur && cur.clave === ed.clave ? null : cur));
-    }, 200);
   }
 
-  function confirmarAhora(m: MetaEvaluacion) {
-    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    if (edicion && edicion.clave === claveMeta(m)) {
-      commitEdicion(edicion);
-      setEdicion(null);
+  // (B1) Tecla: actualización local inmediata. Sin recorte de rango (se acota al
+  // confirmar). Programa el recálculo (400 ms) y la advertencia (1 s).
+  function cambiarTexto(m: MetaEvaluacion, raw: string) {
+    const limpio = raw.replace(/\D/g, "");
+    setEdicion((ed) => (ed && ed.clave === claveMeta(m) ? { ...ed, texto: limpio } : ed));
+    if (edicionRef.current && edicionRef.current.clave === claveMeta(m)) {
+      edicionRef.current = { ...edicionRef.current, texto: limpio };
+    }
+    setAdvCallada(true);
+
+    if (tRecalc.current) clearTimeout(tRecalc.current);
+    tRecalc.current = setTimeout(() => {
+      tRecalc.current = null;
+      // (B2) Recalcular las otras solo con un número válido dentro de rango.
+      if (limpio === "") return;
+      const n = parseInt(limpio, 10);
+      if (Number.isFinite(n) && n >= 0 && n <= m.puntajeMax) upsertFijada(m.seccionIndice, m.orden, n);
+    }, 400);
+
+    if (tAdv.current) clearTimeout(tAdv.current);
+    tAdv.current = setTimeout(() => {
+      tAdv.current = null;
+      setAdvCallada(false);
+    }, 1000);
+  }
+
+  function limpiarTimers() {
+    if (tRecalc.current) { clearTimeout(tRecalc.current); tRecalc.current = null; }
+    if (tAdv.current) { clearTimeout(tAdv.current); tAdv.current = null; }
+  }
+
+  // (A + D) Confirmar (blur o Enter): acota a [0, puntajeMax], y si quedó vacío
+  // LIBERA la meta (vuelve al reparto automático). Sincroniza con el plan.
+  function confirmar(m: MetaEvaluacion) {
+    const ed = edicionRef.current;
+    if (!ed || ed.clave !== claveMeta(m)) return;
+    edicionRef.current = null; // evita el reproceso del blur que sigue a Enter
+    limpiarTimers();
+    setAdvCallada(false);
+    if (ed.texto === "") quitarFijada(m.seccionIndice, m.orden);
+    else upsertFijada(m.seccionIndice, m.orden, Math.max(0, Math.min(m.puntajeMax, parseInt(ed.texto, 10) || 0)));
+    setEdicion(null);
+  }
+
+  // (D) Escape: cancela y restaura el valor que tenía la meta antes de editar.
+  function cancelar(m: MetaEvaluacion) {
+    const ed = edicionRef.current;
+    if (!ed || ed.clave !== claveMeta(m)) return;
+    edicionRef.current = null;
+    limpiarTimers();
+    setAdvCallada(false);
+    if (ed.previaFijada === null) quitarFijada(m.seccionIndice, m.orden);
+    else upsertFijada(m.seccionIndice, m.orden, ed.previaFijada);
+    setEdicion(null);
+  }
+
+  function teclado(m: MetaEvaluacion, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      confirmar(m);
+      e.currentTarget.blur();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelar(m);
+      e.currentTarget.blur();
     }
   }
 
   function liberar(m: MetaEvaluacion) {
-    setFijadas((prev) => prev.filter((f) => !(f.seccionIndice === m.seccionIndice && f.orden === m.orden)));
+    limpiarTimers();
+    edicionRef.current = null;
+    quitarFijada(m.seccionIndice, m.orden);
     setEdicion((cur) => (cur && cur.clave === claveMeta(m) ? null : cur));
   }
 
   function restablecer() {
-    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    limpiarTimers();
+    edicionRef.current = null;
     setFijadas([]);
     setEdicion(null);
+    setAdvCallada(false);
   }
 
+  // Mientras un campo está enfocado, su valor es el texto local; el resto sale
+  // del plan recalculado.
   function valorInput(m: MetaEvaluacion): string {
     if (edicion && edicion.clave === claveMeta(m)) return edicion.texto;
     return String(m.metaEnPuntaje);
   }
+
+  // La advertencia nunca aparece con el campo vacío ni a medio escribir.
+  const advSilenciada = advCallada || (edicion !== null && edicion.texto === "");
 
   // Sugerencia de objetivo realista cuando el actual dejó de ser alcanzable.
   const rangoTecho = !plan.alcanzable && plan.metas.length > 0 ? notaARango(plan.techoAlcanzable) : null;
@@ -249,24 +330,27 @@ export default function PanelObjetivo({
             )}
           </div>
 
-          {!plan.alcanzable ? (
-            <div className="border-2 border-rojo-fuerte/40 bg-rojo-suave rounded-2xl p-3.5 space-y-2">
-              <p className="text-16-medium">⚠ {plan.mensaje}</p>
-              {puedeSugerir && rangoTecho && (
-                <button
-                  type="button"
-                  onClick={aplicarSugerencia}
-                  className="inline-flex items-center rounded-xl bg-primary px-3.5 py-2 text-[14px] font-semibold !text-white shadow-hero transition-transform duration-200 hover:-translate-y-0.5"
-                >
-                  Con esas notas, tu meta realista es {notaALetra(plan.techoAlcanzable)} — usar {rangoTecho.desde}
-                </button>
-              )}
-            </div>
-          ) : (
-            fijadas.length > 0 && (
-              <p className="text-14-normal !text-verde-fuerte font-semibold">✓ {plan.mensaje}</p>
-            )
-          )}
+          {/* La advertencia y el estado del plan solo tras confirmar/idle, nunca
+              a medio escribir (evita el parpadeo mientras se teclea). */}
+          {!advSilenciada &&
+            (!plan.alcanzable ? (
+              <div className="border-2 border-rojo-fuerte/40 bg-rojo-suave rounded-2xl p-3.5 space-y-2">
+                <p className="text-16-medium">⚠ {plan.mensaje}</p>
+                {puedeSugerir && rangoTecho && (
+                  <button
+                    type="button"
+                    onClick={aplicarSugerencia}
+                    className="inline-flex items-center rounded-xl bg-primary px-3.5 py-2 text-[14px] font-semibold !text-white shadow-hero transition-transform duration-200 hover:-translate-y-0.5"
+                  >
+                    Con esas notas, tu meta realista es {notaALetra(plan.techoAlcanzable)} — usar {rangoTecho.desde}
+                  </button>
+                )}
+              </div>
+            ) : (
+              fijadas.length > 0 && (
+                <p className="text-14-normal !text-verde-fuerte font-semibold">✓ {plan.mensaje}</p>
+              )
+            ))}
 
           <ul className="space-y-2">
             {plan.metas.map((m) => {
@@ -316,9 +400,13 @@ export default function PanelObjetivo({
                           inputMode="numeric"
                           aria-label={`Tu nota proyectada en ${m.etiqueta}, sobre ${m.puntajeMax}`}
                           value={valorInput(m)}
-                          onChange={(e) => editar(m, e.target.value)}
-                          onBlur={() => confirmarAhora(m)}
-                          onFocus={(e) => e.currentTarget.select()}
+                          onFocus={(e) => {
+                            iniciarEdicion(m);
+                            e.currentTarget.select();
+                          }}
+                          onChange={(e) => cambiarTexto(m, e.target.value)}
+                          onKeyDown={(e) => teclado(m, e)}
+                          onBlur={() => confirmar(m)}
                           className="w-12 text-right text-[18px] font-bold !text-primary-ink tabular-nums bg-transparent border-b-2 border-primary/40 focus:outline-none focus:border-primary"
                         />
                         <span className="text-14-normal !text-primary-ink/70">de {m.puntajeMax}</span>
