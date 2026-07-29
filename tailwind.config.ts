@@ -25,10 +25,15 @@ const config: Config = {
 				secondary: "#FBE843",
 				// Neutros cálidos: papel de fondo, tinta casi-negra (también para los
 				// números protagonistas: son datos, van en casi-negro, no en ciruela).
-				crema: "#F4F1EB",
-				tinta: "#2A241F",
+				crema: "#F4F1EB", // fondo de página (papel)
+				superficie: "#FFFFFF", // superficie elevada (tarjetas, campos)
+				tinta: "#2A241F", // texto principal (casi-negro cálido)
+				// black-300 (#776E63) es el texto secundario. Ver más abajo.
 				// Hairline muy tenue: respaldo de la sombra para separar tarjetas.
 				hairline: "#E7E1D7",
+				// Borde de control (campos, botones secundarios, divisores): un poco
+				// más presente que el hairline, pero sigue cálido. Nunca border-black.
+				borde: "#D9D2C6",
 				// Color con intención semántica, consistente en toda la app:
 				// verde = asegurado/aprobado, ámbar = exigente/atención, rojo =
 				// reprobado/bloqueo. Tono "suave" para fondos, "fuerte" para texto

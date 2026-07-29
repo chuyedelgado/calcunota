@@ -95,7 +95,7 @@ export default function Ayuda({
         aria-expanded={abierto}
         aria-controls={abierto ? panelId : undefined}
         onClick={() => (abierto ? cerrar() : abrir())}
-        className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-black/25 !text-black-300 text-[11px] font-bold leading-none hover:border-primary hover:!text-primary-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-tinta/25 !text-black-300 text-[11px] font-bold leading-none hover:border-primary hover:!text-primary-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
         ?
       </button>

@@ -18,7 +18,7 @@ import { EXPLICACIONES } from "./explicaciones";
 // Cada estado semántico lleva ícono + texto además del color (nunca color solo).
 const EXIGENCIA_UI: Record<Exigencia, { texto: string; clase: string }> = {
   holgado: { texto: "✓ Holgado", clase: "bg-verde-suave !text-verde-fuerte border-verde-fuerte" },
-  "en linea": { texto: "→ En línea", clase: "bg-black/[0.05] !text-black-100 border-black/20" },
+  "en linea": { texto: "→ En línea", clase: "bg-black/[0.05] !text-black-100 border-borde" },
   exigente: { texto: "▲ Exigente", clase: "bg-ambar-suave !text-ambar-fuerte border-ambar-fuerte" },
   "muy exigente": { texto: "⚠ Muy exigente", clase: "bg-rojo-suave !text-rojo-fuerte border-rojo-fuerte" },
 };
@@ -248,7 +248,7 @@ export default function PanelObjetivo({
               className={`rounded-full px-4 py-2 text-16-medium font-semibold border-2 transition-colors ${
                 activo
                   ? "bg-primary border-primary !text-white shadow-hero"
-                  : "bg-white border-black/15 !text-tinta hover:border-primary/50"
+                  : "bg-white border-borde !text-tinta hover:border-primary/50"
               }`}
             >
               {o.etiqueta}
@@ -272,7 +272,7 @@ export default function PanelObjetivo({
             }
           }}
           className={`w-24 rounded-full px-4 py-2 text-16-medium border-2 ${
-            esPersonalizado ? "border-primary bg-primary text-white placeholder:text-white/70" : "border-black/15 bg-white"
+            esPersonalizado ? "border-primary bg-primary text-white placeholder:text-white/70" : "border-borde bg-white"
           }`}
         />
       </div>
@@ -282,7 +282,7 @@ export default function PanelObjetivo({
           <p className="text-16-medium !text-verde-fuerte font-semibold">✓ {plan.mensaje}</p>
         </div>
       ) : plan.metas.length === 0 ? (
-        <div className="border-2 border-black/15 bg-crema rounded-2xl p-4">
+        <div className="border-2 border-borde bg-crema rounded-2xl p-4">
           <p className="text-16-medium">{plan.mensaje}</p>
         </div>
       ) : (

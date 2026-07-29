@@ -27,7 +27,7 @@ import { iniciarSesion } from "../nav-actions";
 import { buscarMateriasPublico, buscarProfesoresPublico } from "./actions";
 
 const campo =
-  "w-full border border-black/15 rounded-xl px-3 py-2.5 bg-white text-tinta " +
+  "w-full border border-borde rounded-xl px-3 py-2.5 bg-white text-tinta " +
   "focus:outline-none focus:ring-2 focus:ring-primary/40";
 
 const COLORES_SEG = ["#6E3E58", "#834D6B", "#9A5E7C", "#5A2F46", "#8F5878", "#A9708F", "#673A55"];
@@ -276,7 +276,7 @@ function BarraPesos({
                   value={p}
                   onChange={(e) => repartirDesde(i, Number(e.target.value))}
                   aria-label={`Peso de ${nombres[i] || `sección ${i + 1}`} en porcentaje`}
-                  className="w-full border border-black/15 rounded-lg pl-2 pr-6 py-1.5 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full border border-borde rounded-lg pl-2 pr-6 py-1.5 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 !text-black-300 text-14-normal pointer-events-none">
                   %
@@ -666,7 +666,7 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
                                 />
                                 <input
                                   type="number"
-                                  className="w-16 shrink-0 border border-black/15 rounded-lg px-2 py-2 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                  className="w-16 shrink-0 border border-borde rounded-lg px-2 py-2 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40"
                                   value={x.porcentaje}
                                   min={0}
                                   step={1}
@@ -841,7 +841,7 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
               if (paso === 3 && seccionActual > 0) setSeccionActual((s) => s - 1);
               else setPaso((p) => p - 1);
             }}
-            className="flex-1 border-2 border-black/15 rounded-2xl py-3 text-16-medium font-semibold bg-white"
+            className="flex-1 border-2 border-borde rounded-2xl py-3 text-16-medium font-semibold bg-white"
           >
             ← Atrás
           </button>
@@ -967,7 +967,7 @@ function FilaNota({
               if (!Number.isNaN(v)) onEditar({ puntaje: v });
             }}
             className={`w-20 text-center border rounded-lg px-2 py-2 tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 ${
-              pendiente ? "border-dashed border-black/30 bg-crema" : "border-black/15 bg-white"
+              pendiente ? "border-dashed border-borde bg-crema" : "border-borde bg-white"
             }`}
           />
           <span className="text-16-medium !text-black-300">/</span>
@@ -981,7 +981,7 @@ function FilaNota({
               const v = Number(e.target.value);
               if (Number.isFinite(v) && v > 0) onEditar({ puntajeMax: v });
             }}
-            className="w-16 text-center border border-black/15 rounded-lg px-2 py-2 tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="w-16 text-center border border-borde rounded-lg px-2 py-2 tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
         </div>
       </div>

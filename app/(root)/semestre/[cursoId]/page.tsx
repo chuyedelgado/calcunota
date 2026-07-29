@@ -175,7 +175,7 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
           <form action={reabrirCurso.bind(null, curso.id)}>
             <button
               type="submit"
-              className="w-full border-2 border-black/15 bg-white !text-tinta rounded-2xl py-3 text-16-medium font-semibold shadow-suave hover:border-primary/40 transition-colors"
+              className="w-full border-2 border-borde bg-white !text-tinta rounded-2xl py-3 text-16-medium font-semibold shadow-suave hover:border-primary/40 transition-colors"
             >
               Reabrir para corregir
             </button>

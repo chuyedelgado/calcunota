@@ -213,7 +213,7 @@ export default async function SemestrePage({
       {cursos.length > 0 && (
         <div className="max-w-3xl mx-auto flex flex-wrap justify-end gap-3 mb-6">
           {hayEnCurso && (
-            <Button asChild className="border-2 border-black/15 bg-white !text-tinta rounded-2xl !text-[18px] p-3 shadow-suave">
+            <Button asChild className="border-2 border-borde bg-white !text-tinta rounded-2xl !text-[18px] p-3 shadow-suave">
               <Link href={`/semestre/cerrar?${query}`}>Cerrar semestre</Link>
             </Button>
           )}
@@ -231,7 +231,7 @@ export default async function SemestrePage({
               <Button asChild className="calcular_btn !text-[18px] !p-3">
                 <Link href={`/semestre/nuevo?${query}`}>Arma tu semestre</Link>
               </Button>
-              <Button asChild className="border-2 border-black/15 bg-white !text-tinta rounded-2xl !text-[18px] p-3">
+              <Button asChild className="border-2 border-borde bg-white !text-tinta rounded-2xl !text-[18px] p-3">
                 <Link href={`/semestre/agregar?${query}`}>Agregar una materia</Link>
               </Button>
             </div>
