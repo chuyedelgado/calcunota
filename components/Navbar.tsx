@@ -45,7 +45,9 @@ export default function Navbar({ usuario }: { usuario: UsuarioNav | null }) {
                   <Link
                     key={s.href}
                     href={s.href}
-                    className={`text-16-medium ${activa ? "text-blue-800 font-bold" : "text-black"}`}
+                    className={`text-16-medium transition-colors ${
+                      activa ? "!text-primary-ink font-bold" : "!text-black-300 hover:!text-tinta"
+                    }`}
                   >
                     {s.label}
                   </Link>
@@ -68,10 +70,10 @@ export default function Navbar({ usuario }: { usuario: UsuarioNav | null }) {
                       alt=""
                       width={36}
                       height={36}
-                      className="rounded-full border-2 border-black"
+                      className="rounded-full border-2 border-borde"
                     />
                   ) : (
-                    <span className="w-9 h-9 rounded-full border-2 border-black bg-primary-100 flex items-center justify-center font-bold">
+                    <span className="w-9 h-9 rounded-full border-2 border-borde bg-primary-100 flex items-center justify-center font-bold !text-primary-ink">
                       {usuario.nombre?.[0]?.toUpperCase() ?? "?"}
                     </span>
                   )}
@@ -79,14 +81,14 @@ export default function Navbar({ usuario }: { usuario: UsuarioNav | null }) {
                 {menuAbierto && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setMenuAbierto(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white border-2 border-black rounded-xl shadow-xl p-3 z-50">
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-superficie border border-hairline rounded-xl shadow-suave p-3 z-50">
                       {usuario.nombre && (
                         <p className="text-16-medium font-semibold px-1 pb-2 truncate">{usuario.nombre}</p>
                       )}
                       <form action={cerrarSesion}>
                         <button
                           type="submit"
-                          className="w-full flex items-center gap-2 text-16-medium py-2 px-1 hover:text-blue-800"
+                          className="w-full flex items-center gap-2 text-16-medium py-2 px-2 rounded-lg hover:bg-primary-100 hover:!text-primary-ink transition-colors"
                         >
                           <LogOut size={18} /> Cerrar sesión
                         </button>
@@ -97,7 +99,10 @@ export default function Navbar({ usuario }: { usuario: UsuarioNav | null }) {
               </div>
             ) : (
               <form action={iniciarSesion}>
-                <button type="submit" className="text-16-medium text-blue-800 font-semibold">
+                <button
+                  type="submit"
+                  className="text-14-normal font-semibold !text-primary-ink bg-primary-100 rounded-xl px-3 py-2 hover:bg-primary/15 transition-colors"
+                >
                   Iniciar sesión
                 </button>
               </form>
@@ -107,7 +112,7 @@ export default function Navbar({ usuario }: { usuario: UsuarioNav | null }) {
       </header>
 
       {/* Barra inferior de pestañas: solo móvil */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t-2 border-black flex">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-superficie border-t border-hairline flex">
         {SECCIONES.map((s) => {
           const activa = esActiva(s.href, pathname);
           const Icono = s.icono;
@@ -115,8 +120,8 @@ export default function Navbar({ usuario }: { usuario: UsuarioNav | null }) {
             <Link
               key={s.href}
               href={s.href}
-              className={`flex-1 flex flex-col items-center py-2 gap-0.5 ${
-                activa ? "text-blue-800" : "text-black"
+              className={`flex-1 flex flex-col items-center py-2 gap-0.5 transition-colors ${
+                activa ? "!text-primary-ink" : "!text-black-300"
               }`}
             >
               <Icono size={22} strokeWidth={activa ? 2.5 : 2} />
