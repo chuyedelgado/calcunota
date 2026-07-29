@@ -28,8 +28,8 @@ import {
 } from "./tipos";
 
 const campo =
-  "w-full border-2 border-black rounded-lg px-3 py-2 bg-white text-black " +
-  "focus:outline-none focus:ring-2 focus:ring-blue-800";
+  "w-full border border-borde rounded-lg px-3 py-2 bg-superficie text-tinta " +
+  "focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60";
 
 // Las notas se muestran truncadas a entero (la UTP trunca); nunca con decimales.
 const fmt = formatearNota;
@@ -232,18 +232,18 @@ export default function Calculadora({
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-20-medium font-semibold">Registrar notas</h2>
-          <div className="flex border-2 border-black rounded-full overflow-hidden text-14-normal">
+          <div className="flex rounded-full overflow-hidden border border-borde bg-superficie text-14-normal">
             <button
               type="button"
               onClick={() => setModo("momento")}
-              className={`px-3 py-1 ${modo === "momento" ? "bg-black !text-white" : "!text-black"}`}
+              className={`px-3 py-1 transition-colors ${modo === "momento" ? "bg-primary !text-white" : "!text-black-300 hover:!text-tinta"}`}
             >
               Momento
             </button>
             <button
               type="button"
               onClick={() => setModo("lista")}
-              className={`px-3 py-1 ${modo === "lista" ? "bg-black !text-white" : "!text-black"}`}
+              className={`px-3 py-1 transition-colors ${modo === "lista" ? "bg-primary !text-white" : "!text-black-300 hover:!text-tinta"}`}
             >
               Lista
             </button>
@@ -253,8 +253,8 @@ export default function Calculadora({
         <p className="text-16-medium mb-2">
           {registradas} de {total} evaluaciones registradas
         </p>
-        <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-5">
-          <div className="h-full bg-blue-800 rounded-full transition-all duration-200" style={{ width: `${progreso}%` }} />
+        <div className="h-3 bg-primary-100 rounded-full overflow-hidden mb-5">
+          <div className="h-full bg-primary rounded-full transition-all duration-200" style={{ width: `${progreso}%` }} />
         </div>
 
         {efecto && (
@@ -286,7 +286,7 @@ export default function Calculadora({
               <button
                 type="button"
                 onClick={() => setEfecto(null)}
-                className="flex-1 border-2 border-black rounded-xl py-3 text-16-medium font-semibold"
+                className="flex-1 border-2 border-borde !text-tinta bg-superficie rounded-xl py-3 text-16-medium font-semibold hover:border-primary/40 transition-colors"
               >
                 Listo
               </button>
@@ -326,7 +326,7 @@ export default function Calculadora({
                       key={nota.id}
                       type="button"
                       onClick={() => setNotaAbierta({ seccionId: seccion.id, notaId: nota.id })}
-                      className="border-2 border-black rounded-full px-3 py-1 text-14-normal !text-black bg-white"
+                      className="border border-borde rounded-full px-3 py-1 text-14-normal !text-tinta bg-superficie hover:border-primary/40 transition-colors"
                     >
                       {etiquetaNota(seccion, nota, padre)}: <span className="font-bold">{nota.puntaje}</span>/
                       {nota.puntajeMax}
@@ -412,7 +412,7 @@ function FilaCompacta({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-16-medium font-medium">{etiquetaNota(seccion, nota)}</span>
-        <button type="button" onClick={() => setRenombrar((v) => !v)} className="text-14-normal !text-blue-800 underline">
+        <button type="button" onClick={() => setRenombrar((v) => !v)} className="text-14-normal !text-primary-ink underline">
           renombrar
         </button>
       </div>
@@ -485,13 +485,13 @@ function HojaNota({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onCerrar} />
+      <div className="absolute inset-0 bg-tinta/40" onClick={onCerrar} />
       <div
-        className={`relative w-full sm:max-w-md bg-white border-t-4 sm:border-4 border-black rounded-t-3xl sm:rounded-3xl p-6 transition-transform duration-200 ${
+        className={`relative w-full sm:max-w-md bg-superficie border-t border-hairline sm:border sm:border-hairline rounded-t-3xl sm:rounded-3xl shadow-hero p-6 transition-transform duration-200 ${
           visible ? "translate-y-0" : "translate-y-full sm:translate-y-3"
         }`}
       >
-        <p className="text-24-black !p-0 !text-black">{desc.trim() || etiquetaAuto}</p>
+        <p className="text-24-black !p-0 !text-tinta">{desc.trim() || etiquetaAuto}</p>
         <p className="text-14-normal !text-black-300 mt-1">Escribe tu puntaje</p>
 
         <div className="flex items-end gap-3 mt-4">
@@ -499,7 +499,7 @@ function HojaNota({
             autoFocus
             type="number"
             inputMode="decimal"
-            className="w-32 text-30-bold border-2 border-black rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-800"
+            className="w-32 text-30-bold border border-borde rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60"
             value={puntajeStr}
             onChange={(e) => setPuntajeStr(e.target.value)}
             placeholder="—"
@@ -508,7 +508,7 @@ function HojaNota({
           <input
             type="number"
             inputMode="decimal"
-            className="w-20 border-2 border-black rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-800"
+            className="w-20 border border-borde rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60"
             value={maxStr}
             onChange={(e) => setMaxStr(e.target.value)}
           />
@@ -519,13 +519,13 @@ function HojaNota({
         {renombrar ? (
           <input className={`${campo} mt-4`} value={desc} placeholder={etiquetaAuto} onChange={(e) => setDesc(e.target.value)} />
         ) : (
-          <button type="button" className="text-14-normal !text-blue-800 underline mt-4" onClick={() => setRenombrar(true)}>
+          <button type="button" className="text-14-normal !text-primary-ink underline mt-4" onClick={() => setRenombrar(true)}>
             Renombrar evaluación
           </button>
         )}
 
         <div className="flex gap-3 mt-6">
-          <button type="button" onClick={onCerrar} className="flex-1 border-2 border-black rounded-xl py-3 text-16-medium font-semibold">
+          <button type="button" onClick={onCerrar} className="flex-1 border-2 border-borde !text-tinta bg-superficie rounded-xl py-3 text-16-medium font-semibold hover:border-primary/40 transition-colors">
             Cancelar
           </button>
           <Button
