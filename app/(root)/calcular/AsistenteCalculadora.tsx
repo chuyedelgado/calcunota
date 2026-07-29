@@ -10,6 +10,8 @@ import {
   validarSecciones,
 } from "@/lib/calculos";
 import PanelObjetivo from "@/components/calculadora/PanelObjetivo";
+import Ayuda from "@/components/calculadora/Ayuda";
+import { EXPLICACIONES } from "@/components/calculadora/explicaciones";
 import {
   CLAVE_MATERIA_PUBLICA,
   aEval,
@@ -54,6 +56,7 @@ function Combobox({
   placeholder,
   opciones,
   buscar,
+  disabled = false,
 }: {
   id: string;
   valor: string;
@@ -61,6 +64,7 @@ function Combobox({
   placeholder: string;
   opciones?: string[];
   buscar?: (q: string) => Promise<string[]>;
+  disabled?: boolean;
 }) {
   const [sug, setSug] = useState<string[]>([]);
   const [abierto, setAbierto] = useState(false);
@@ -85,12 +89,14 @@ function Combobox({
     <div className="relative">
       <input
         id={id}
-        className={campo}
+        className={`${campo} ${disabled ? "bg-crema/70 text-black-300 cursor-not-allowed" : ""}`}
         value={valor}
         placeholder={placeholder}
         autoComplete="off"
+        disabled={disabled}
         onChange={(e) => onInput(e.target.value)}
         onFocus={() => {
+          if (disabled) return;
           if (opciones) {
             setSug(opciones.slice(0, 8));
             setAbierto(true);
@@ -290,9 +296,26 @@ type Contexto = { universidad: string; materia: string; profesor: string };
 export default function AsistenteCalculadora({ universidades }: { universidades: string[] }) {
   const [paso, setPaso] = useState(1);
   const [contexto, setContexto] = useState<Contexto>({ universidad: "", materia: "", profesor: "" });
+  // Escotilla: escribir la materia a mano sin elegir universidad. La universidad
+  // filtra el catálogo, pero es opcional — el nombre de la materia no.
+  const [materiaLibre, setMateriaLibre] = useState(false);
   const [secciones, setSecciones] = useState<SeccionUI[]>(() => plantillaInicial());
   const [seccionActual, setSeccionActual] = useState(0);
   const montado = useRef(false);
+
+  // La materia y el profesor dependen de la universidad. Al cambiarla, lo ya
+  // elegido del catálogo queda incoherente, así que se limpia (salvo que no
+  // hubiera universidad antes: ahí el texto es manual y se conserva).
+  function cambiarUniversidad(v: string) {
+    setContexto((c) =>
+      c.universidad && c.universidad !== v
+        ? { universidad: v, materia: "", profesor: "" }
+        : { ...c, universidad: v },
+    );
+    if (v) setMateriaLibre(false);
+  }
+
+  const materiaBloqueada = !contexto.universidad.trim() && !materiaLibre;
 
   // Guarda en localStorage para precargar si el visitante se registra.
   useEffect(() => {
@@ -455,9 +478,11 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
   }
 
   const estado = calcularEstadoMateria(toEval(secciones));
+  // Los tres suman 100 (base de la barra). "Perdido" es lo que ya no se puede
+  // recuperar; se deriva de los otros dos, no del máximo.
   const asegurado = estado.notaActual;
   const enJuego = estado.porcentajeRestante;
-  const perdido = Math.max(0, 100 - estado.notaMaxima);
+  const perdido = Math.max(0, 100 - asegurado - enJuego);
 
   return (
     <section className="section_container max-w-2xl">
@@ -477,10 +502,28 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
       </div>
 
       <div key={paso} className="paso-anim">
-        {/* PASO 1 — Contexto */}
+        {/* PASO 1 — Contexto. Orden jerárquico: la universidad decide qué
+            materias y profesores existen, así que va primero. */}
         {paso === 1 && (
           <div className="space-y-5">
             <h1 className="text-30-bold">Tu materia</h1>
+
+            <div>
+              <label htmlFor="uni" className="block text-16-medium font-semibold mb-2">
+                Universidad <span className="text-black-300 font-normal">(opcional)</span>
+              </label>
+              <Combobox
+                id="uni"
+                valor={contexto.universidad}
+                onChange={cambiarUniversidad}
+                placeholder="Tu universidad…"
+                opciones={universidades}
+              />
+              <p className="text-14-normal !text-black-300 mt-1.5">
+                Elígela primero: con ella filtramos las materias y los profesores de tu universidad.
+              </p>
+            </div>
+
             <div>
               <label htmlFor="materia" className="block text-16-medium font-semibold mb-2">
                 Materia
@@ -489,22 +532,30 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
                 id="materia"
                 valor={contexto.materia}
                 onChange={(v) => setContexto((c) => ({ ...c, materia: v }))}
-                placeholder="Cálculo I…"
-                buscar={buscarMateriasPublico}
+                placeholder={materiaLibre ? "Escribe el nombre de tu materia…" : "Cálculo I…"}
+                buscar={(q) => buscarMateriasPublico(q, contexto.universidad)}
+                disabled={materiaBloqueada}
               />
+              {materiaBloqueada ? (
+                <p className="text-14-normal !text-black-300 mt-1.5">
+                  Elige primero tu universidad.{" "}
+                  <button
+                    type="button"
+                    onClick={() => setMateriaLibre(true)}
+                    className="!text-primary-ink font-semibold underline"
+                  >
+                    O escríbela a mano
+                  </button>
+                </p>
+              ) : (
+                !contexto.universidad.trim() && (
+                  <p className="text-14-normal !text-black-300 mt-1.5">
+                    La estás escribiendo a mano, sin catálogo.
+                  </p>
+                )
+              )}
             </div>
-            <div>
-              <label htmlFor="uni" className="block text-16-medium font-semibold mb-2">
-                Universidad <span className="text-black-300 font-normal">(opcional)</span>
-              </label>
-              <Combobox
-                id="uni"
-                valor={contexto.universidad}
-                onChange={(v) => setContexto((c) => ({ ...c, universidad: v }))}
-                placeholder="Tu universidad…"
-                opciones={universidades}
-              />
-            </div>
+
             <div>
               <label htmlFor="prof" className="block text-16-medium font-semibold mb-2">
                 Profesor <span className="text-black-300 font-normal">(opcional)</span>
@@ -513,8 +564,9 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
                 id="prof"
                 valor={contexto.profesor}
                 onChange={(v) => setContexto((c) => ({ ...c, profesor: v }))}
-                placeholder="Nombre del profe…"
-                buscar={buscarProfesoresPublico}
+                placeholder={contexto.universidad.trim() ? "Nombre del profe…" : "Elige tu universidad primero"}
+                buscar={(q) => buscarProfesoresPublico(q, contexto.universidad)}
+                disabled={!contexto.universidad.trim()}
               />
             </div>
           </div>
@@ -713,8 +765,10 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
           <div className="space-y-8">
             <h1 className="text-30-bold">{contexto.materia || "Tu materia"}</h1>
 
-            <div className="tarjeta-hero p-6 text-center">
-              <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Nota actual</p>
+            <div className="tarjeta-hero p-6 text-center relative">
+              <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300 inline-flex items-center gap-1.5">
+                Nota actual <Ayuda explicacion={EXPLICACIONES.notaActual} />
+              </p>
               <p className="text-[64px] leading-none font-extrabold tabular-nums my-2 text-tinta">
                 {fmt(asegurado)}
                 <span className="text-20-medium !text-black-300"> / 100</span>
@@ -725,20 +779,35 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
                 <div style={{ width: `${enJuego}%` }} className="bg-black/15" />
                 <div style={{ width: `${perdido}%` }} className="bg-rojo-fuerte" />
               </div>
+              {/* Leyenda inline permanente: es parte del gráfico. Cada rótulo trae
+                  su "?" (abre hacia abajo para no tapar la barra que explica). */}
               <div className="flex justify-center flex-wrap gap-x-4 gap-y-1 mt-3 text-14-normal !text-black-300">
-                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-verde-fuerte mr-1.5 align-middle" />Asegurado {fmt(asegurado)}</span>
-                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-black/15 mr-1.5 align-middle" />En juego {fmt(enJuego)}</span>
-                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-rojo-fuerte mr-1.5 align-middle" />Perdido {fmt(perdido)}</span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-verde-fuerte align-middle" />
+                  Asegurado {fmt(asegurado)} <Ayuda explicacion={EXPLICACIONES.asegurado} preferir="abajo" />
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-black/15 align-middle" />
+                  En juego {fmt(enJuego)} <Ayuda explicacion={EXPLICACIONES.enJuego} preferir="abajo" />
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block w-2.5 h-2.5 rounded-sm bg-rojo-fuerte align-middle" />
+                  Perdido {fmt(perdido)} <Ayuda explicacion={EXPLICACIONES.perdido} preferir="abajo" />
+                </span>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="tarjeta p-3">
-                <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Máxima posible</p>
+              <div className="tarjeta p-3 relative">
+                <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300 inline-flex items-center gap-1.5">
+                  Máxima posible <Ayuda explicacion={EXPLICACIONES.notaMaxima} />
+                </p>
                 <p className="text-[24px] font-bold tabular-nums mt-0.5">{fmt(estado.notaMaxima)}</p>
               </div>
-              <div className="tarjeta p-3">
-                <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Promedio actual</p>
+              <div className="tarjeta p-3 relative">
+                <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300 inline-flex items-center gap-1.5">
+                  Promedio actual <Ayuda explicacion={EXPLICACIONES.promedioActual} />
+                </p>
                 <p className="text-[24px] font-bold tabular-nums mt-0.5">
                   {estado.promedioParcial === null ? "—" : fmt(estado.promedioParcial)}
                 </p>
