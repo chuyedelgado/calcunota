@@ -11,11 +11,19 @@ import {
   notaALetra,
   proyectar,
   validarSecciones,
-  type SeccionEvaluacion,
 } from "@/lib/calculos";
 import PanelObjetivo from "./PanelObjetivo";
-import { normalizar } from "@/lib/texto";
-import type { BorradorSeccion, NotaUI, SeccionUI } from "./tipos";
+import EditorSecciones from "./EditorSecciones";
+import {
+  aEval,
+  borradorAEval,
+  esGrupo,
+  pesoEfectivo,
+  seccionesUIaBorrador,
+  type BorradorSeccion,
+  type NotaUI,
+  type SeccionUI,
+} from "./tipos";
 
 const campo =
   "w-full border-2 border-black rounded-lg px-3 py-2 bg-white text-black " +
@@ -24,19 +32,51 @@ const campo =
 // Las notas se muestran truncadas a entero (la UTP trunca); nunca con decimales.
 const fmt = formatearNota;
 
-function toEval(secciones: SeccionUI[]): SeccionEvaluacion[] {
-  return secciones.map((s) => ({
-    nombre: s.nombre,
-    porcentaje: s.porcentaje,
-    cantidad: s.cantidad,
-    notas: s.notas.map((n) => ({ puntaje: n.puntaje, puntajeMax: n.puntajeMax })),
-  }));
+// El motor consume el árbol; aEval lo espeja (y aplana solo internamente).
+const toEval = aEval;
+
+// Secciones hoja (las que tienen notas): las de nivel superior y las
+// subsecciones de un laboratorio, cada una con su padre para dar contexto.
+type Hoja = { seccion: SeccionUI; padre: SeccionUI | null };
+function hojasDe(secciones: SeccionUI[]): Hoja[] {
+  const out: Hoja[] = [];
+  for (const s of secciones) {
+    if (esGrupo(s)) for (const sub of s.subsecciones!) out.push({ seccion: sub, padre: s });
+    else out.push({ seccion: s, padre: null });
+  }
+  return out;
 }
 
-function etiquetaNota(seccion: SeccionUI, nota: NotaUI): string {
-  return nota.descripcion?.trim()
+// Actualiza una nota en el árbol, buscándola en secciones y subsecciones.
+function actualizarNotaEnArbol(
+  ss: SeccionUI[],
+  seccionId: string,
+  notaId: string,
+  cambio: Partial<NotaUI>,
+): SeccionUI[] {
+  return ss.map((s) => {
+    if (s.id === seccionId) {
+      return { ...s, notas: s.notas.map((n) => (n.id === notaId ? { ...n, ...cambio } : n)) };
+    }
+    if (s.subsecciones && s.subsecciones.length > 0) {
+      return {
+        ...s,
+        subsecciones: s.subsecciones.map((sub) =>
+          sub.id === seccionId
+            ? { ...sub, notas: sub.notas.map((n) => (n.id === notaId ? { ...n, ...cambio } : n)) }
+            : sub,
+        ),
+      };
+    }
+    return s;
+  });
+}
+
+function etiquetaNota(seccion: SeccionUI, nota: NotaUI, padre?: SeccionUI | null): string {
+  const base = nota.descripcion?.trim()
     ? nota.descripcion.trim()
     : nombreEvaluacion(seccion.nombre, nota.orden, seccion.cantidad);
+  return padre ? `${padre.nombre} · ${base}` : base;
 }
 
 // Color semántico consistente: verde asegurado, ámbar exigente, rojo bloqueo.
@@ -99,12 +139,14 @@ export default function Calculadora({
   const caminoADFundamental =
     fundamental && !proyC.alcanzable && !proyC.yaAlcanzado && estado.notaMaxima >= APROBACION_NORMAL;
 
-  const total = secciones.reduce((a, s) => a + s.notas.length, 0);
-  const registradas = secciones.reduce((a, s) => a + s.notas.filter((n) => n.puntaje !== null).length, 0);
+  const hojas = hojasDe(secciones);
+  const total = hojas.reduce((a, h) => a + h.seccion.notas.length, 0);
+  const registradas = hojas.reduce((a, h) => a + h.seccion.notas.filter((n) => n.puntaje !== null).length, 0);
   const progreso = total === 0 ? 0 : (registradas / total) * 100;
 
   function primeraPendiente(ss: SeccionUI[]): NotaRef | null {
-    for (const s of ss) for (const n of s.notas) if (n.puntaje === null) return { seccionId: s.id, notaId: n.id };
+    for (const h of hojasDe(ss))
+      for (const n of h.seccion.notas) if (n.puntaje === null) return { seccionId: h.seccion.id, notaId: n.id };
     return null;
   }
   function mensajeUmbral(valor: number): string {
@@ -117,11 +159,7 @@ export default function Calculadora({
     const antes = calcularEstadoMateria(evalAntes).notaActual;
     const aseguradosAntes = new Set(umbralesMomento.filter((o) => proyectar(evalAntes, o).yaAlcanzado));
 
-    const nuevas = secciones.map((s) =>
-      s.id !== ref.seccionId
-        ? s
-        : { ...s, notas: s.notas.map((n) => (n.id === ref.notaId ? { ...n, puntaje, puntajeMax, descripcion } : n)) },
-    );
+    const nuevas = actualizarNotaEnArbol(secciones, ref.seccionId, ref.notaId, { puntaje, puntajeMax, descripcion });
     const evalDespues = toEval(nuevas);
     const despues = calcularEstadoMateria(evalDespues).notaActual;
     const nuevoUmbral = umbralesMomento
@@ -138,11 +176,14 @@ export default function Calculadora({
     });
   }
 
-  const pendientes: { seccion: SeccionUI; nota: NotaUI }[] = [];
-  const listas: { seccion: SeccionUI; nota: NotaUI }[] = [];
-  for (const s of secciones) for (const n of s.notas) (n.puntaje === null ? pendientes : listas).push({ seccion: s, nota: n });
+  const pendientes: { seccion: SeccionUI; padre: SeccionUI | null; nota: NotaUI }[] = [];
+  const listas: { seccion: SeccionUI; padre: SeccionUI | null; nota: NotaUI }[] = [];
+  for (const h of hojas)
+    for (const n of h.seccion.notas)
+      (n.puntaje === null ? pendientes : listas).push({ seccion: h.seccion, padre: h.padre, nota: n });
 
-  const seccionAbierta = notaAbierta && secciones.find((s) => s.id === notaAbierta.seccionId);
+  const hojaAbierta = notaAbierta ? hojas.find((h) => h.seccion.id === notaAbierta.seccionId) : null;
+  const seccionAbierta = hojaAbierta?.seccion ?? null;
   const notaAbiertaObj = seccionAbierta?.notas.find((n) => n.id === notaAbierta?.notaId);
 
   return (
@@ -256,17 +297,15 @@ export default function Calculadora({
               <div>
                 <p className="text-14-normal !text-black-300 mb-2">Pendientes — toca para registrar</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {pendientes.map(({ seccion, nota }) => (
+                  {pendientes.map(({ seccion, padre, nota }) => (
                     <button
                       key={nota.id}
                       type="button"
                       onClick={() => setNotaAbierta({ seccionId: seccion.id, notaId: nota.id })}
                       className="text-left tarjeta p-4 hover:border-primary/40 transition-colors"
                     >
-                      <p className="text-16-medium font-semibold">{etiquetaNota(seccion, nota)}</p>
-                      <p className="text-14-normal !text-black-300">
-                        {seccion.nombre} · sobre {nota.puntajeMax}
-                      </p>
+                      <p className="text-16-medium font-semibold">{etiquetaNota(seccion, nota, padre)}</p>
+                      <p className="text-14-normal !text-black-300">sobre {nota.puntajeMax}</p>
                     </button>
                   ))}
                 </div>
@@ -277,14 +316,15 @@ export default function Calculadora({
               <div>
                 <p className="text-14-normal !text-black-300 mb-2">Registradas — toca para editar</p>
                 <div className="flex flex-wrap gap-2">
-                  {listas.map(({ seccion, nota }) => (
+                  {listas.map(({ seccion, padre, nota }) => (
                     <button
                       key={nota.id}
                       type="button"
                       onClick={() => setNotaAbierta({ seccionId: seccion.id, notaId: nota.id })}
                       className="border-2 border-black rounded-full px-3 py-1 text-14-normal !text-black bg-white"
                     >
-                      {etiquetaNota(seccion, nota)}: <span className="font-bold">{nota.puntaje}</span>/{nota.puntajeMax}
+                      {etiquetaNota(seccion, nota, padre)}: <span className="font-bold">{nota.puntaje}</span>/
+                      {nota.puntajeMax}
                     </button>
                   ))}
                 </div>
@@ -293,24 +333,28 @@ export default function Calculadora({
           </div>
         ) : (
           <div className="space-y-5">
-            {secciones.map((s) => (
-              <div key={s.id} className="tarjeta p-4">
-                <div className="flex items-baseline justify-between mb-3">
-                  <p className="text-16-medium font-semibold">{s.nombre}</p>
-                  <p className="text-14-normal !text-black-300">{s.porcentaje}%</p>
+            {secciones.map((s) =>
+              esGrupo(s) ? (
+                <BloqueLaboratorio key={s.id} grupo={s} onEditarNota={onEditarNota} />
+              ) : (
+                <div key={s.id} className="tarjeta p-4">
+                  <div className="flex items-baseline justify-between mb-3">
+                    <p className="text-16-medium font-semibold">{s.nombre}</p>
+                    <p className="text-14-normal !text-black-300">{s.porcentaje}%</p>
+                  </div>
+                  <div className="space-y-4">
+                    {s.notas.map((n) => (
+                      <FilaCompacta key={n.id} seccion={s} nota={n} onEdit={(c) => onEditarNota(s.id, n.id, c)} />
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  {s.notas.map((n) => (
-                    <FilaCompacta key={n.id} seccion={s} nota={n} onEdit={(c) => onEditarNota(s.id, n.id, c)} />
-                  ))}
-                </div>
-              </div>
-            ))}
+              ),
+            )}
           </div>
         )}
       </div>
 
-      <EditorEsquema secciones={secciones} onGuardar={onGuardarEsquema} antesDeGuardar={antesDeGuardarEsquema} />
+      <BloqueEsquema secciones={secciones} onGuardar={onGuardarEsquema} antesDeGuardar={antesDeGuardarEsquema} />
 
       {notaAbierta && seccionAbierta && notaAbiertaObj && (
         <HojaNota
@@ -480,7 +524,60 @@ function HojaNota({
   );
 }
 
-function EditorEsquema({
+// Bloque de captura de un laboratorio: agrupa sus subsecciones, muestra el
+// profesor y el peso efectivo de cada una, y su nota parcial de laboratorio.
+function BloqueLaboratorio({
+  grupo,
+  onEditarNota,
+}: {
+  grupo: SeccionUI;
+  onEditarNota: (seccionId: string, notaId: string, cambio: Partial<NotaUI>) => void;
+}) {
+  const subs = grupo.subsecciones ?? [];
+  // Nota parcial del bloque, en su propia escala 0-100 (independiente del 25%).
+  const parcialLab = calcularEstadoMateria(
+    subs.map((sub) => ({
+      nombre: sub.nombre,
+      porcentaje: sub.porcentaje,
+      cantidad: sub.cantidad,
+      notas: sub.notas.map((n) => ({ puntaje: n.puntaje, puntajeMax: n.puntajeMax })),
+    })),
+  ).notaActual;
+
+  return (
+    <div className="tarjeta p-4 border-primary/30">
+      <div className="flex items-baseline justify-between mb-1">
+        <p className="text-16-medium font-semibold">{grupo.nombre}</p>
+        <p className="text-14-normal !text-black-300">{grupo.porcentaje}% de la materia</p>
+      </div>
+      <p className="text-14-normal !text-black-300 mb-3">
+        {grupo.profesorNombre ? `Profesor: ${grupo.profesorNombre} · ` : ""}
+        nota parcial del laboratorio <span className="font-bold tabular-nums text-tinta">{fmt(parcialLab)}</span>/100
+      </p>
+      <div className="space-y-4">
+        {subs.map((sub) => (
+          <div key={sub.id} className="rounded-xl bg-crema border border-hairline p-3">
+            <div className="flex items-baseline justify-between mb-2">
+              <p className="text-14-normal font-semibold text-tinta">{sub.nombre}</p>
+              <p className="text-[11px] !text-black-300 tabular-nums">
+                {Math.round(pesoEfectivo(grupo.porcentaje, sub.porcentaje) * 100) / 100}% de la nota final
+              </p>
+            </div>
+            <div className="space-y-4">
+              {sub.notas.map((n) => (
+                <FilaCompacta key={n.id} seccion={sub} nota={n} onEdit={(c) => onEditarNota(sub.id, n.id, c)} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Editor de esquema completo (incluye subsecciones de laboratorio) en un
+// desplegable. Usa el editor compartido y persiste el árbol.
+function BloqueEsquema({
   secciones,
   onGuardar,
   antesDeGuardar,
@@ -489,34 +586,23 @@ function EditorEsquema({
   onGuardar: (borrador: BorradorSeccion[]) => Promise<{ ok: boolean; error?: string }>;
   antesDeGuardar?: () => Promise<void>;
 }) {
-  const aBorrador = (ss: SeccionUI[]): BorradorSeccion[] =>
-    ss.map((s) => ({ id: s.id, nombre: s.nombre, porcentaje: s.porcentaje, cantidad: s.cantidad }));
-
-  const [borrador, setBorrador] = useState<BorradorSeccion[]>(() => aBorrador(secciones));
+  const [borrador, setBorrador] = useState<BorradorSeccion[]>(() => seccionesUIaBorrador(secciones));
   const [mensaje, setMensaje] = useState("");
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    setBorrador(aBorrador(secciones));
+    setBorrador(seccionesUIaBorrador(secciones));
   }, [secciones]);
 
-  const validacion = validarSecciones(borrador.map((s) => ({ nombre: s.nombre, porcentaje: s.porcentaje, cantidad: s.cantidad, notas: [] })));
-  const camposOk = borrador.every((s) => s.nombre.trim() && s.porcentaje > 0 && Number.isInteger(s.cantidad) && s.cantidad >= 1);
-
-  function set(i: number, cambio: Partial<BorradorSeccion>) {
-    setBorrador((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...cambio } : s)));
-  }
-  function quitar(i: number) {
-    setBorrador((prev) => prev.filter((_, idx) => idx !== i));
-  }
-  function agregar() {
-    setBorrador((prev) => {
-      const nueva: BorradorSeccion = { id: `nueva-${Date.now()}-${prev.length}`, nombre: "", porcentaje: 0, cantidad: 1 };
-      // El examen final va siempre al final: la sección nueva entra antes de él.
-      const idxFinal = prev.reduce((acc, s, i) => (normalizar(s.nombre).includes("final") ? i : acc), -1);
-      return idxFinal >= 0 ? [...prev.slice(0, idxFinal), nueva, ...prev.slice(idxFinal)] : [...prev, nueva];
-    });
-  }
+  const validacion = validarSecciones(borradorAEval(borrador));
+  const estructuraOk =
+    borrador.length > 0 &&
+    borrador.every((s) =>
+      s.nombre.trim() && s.porcentaje > 0 &&
+      (esGrupo(s)
+        ? (s.subsecciones ?? []).every((x) => x.nombre.trim() && x.porcentaje > 0 && x.cantidad >= 1)
+        : Number.isInteger(s.cantidad) && s.cantidad >= 1),
+    );
 
   async function guardar() {
     setGuardando(true);
@@ -529,49 +615,19 @@ function EditorEsquema({
 
   return (
     <details className="tarjeta">
-      <summary className="cursor-pointer select-none text-16-medium font-semibold p-4">Ajustar esquema de evaluación</summary>
+      <summary className="cursor-pointer select-none text-16-medium font-semibold p-4">
+        Ajustar esquema de evaluación
+      </summary>
       <div className="p-4 pt-0 space-y-3">
         <p className="text-14-normal !text-black-300">
-          Pesos y número de notas. Al bajar la cantidad solo se eliminan notas vacías.
+          Pesos, número de notas y subsecciones. Al bajar la cantidad solo se eliminan notas vacías.
         </p>
-        {borrador.map((s, i) => (
-          <div key={s.id} className="flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[140px]">
-              <span className="block text-14-normal !text-black-300 mb-1">Sección</span>
-              <input className={campo} value={s.nombre} onChange={(e) => set(i, { nombre: e.target.value })} />
-            </div>
-            <div className="w-20">
-              <span className="block text-14-normal !text-black-300 mb-1">%</span>
-              <input type="number" className={campo} value={s.porcentaje} min={0} onChange={(e) => set(i, { porcentaje: Number(e.target.value) })} />
-            </div>
-            <div className="w-20">
-              <span className="block text-14-normal !text-black-300 mb-1"># notas</span>
-              <input type="number" className={campo} value={s.cantidad} min={1} onChange={(e) => set(i, { cantidad: Number(e.target.value) })} />
-            </div>
-            <button type="button" onClick={() => quitar(i)} className="text-16-medium font-semibold text-rojo-fuerte pb-2 px-1" aria-label="Quitar">
-              ✕
-            </button>
-          </div>
-        ))}
-
-        <button type="button" onClick={agregar} className="text-16-medium font-semibold text-blue-800 underline">
-          + Agregar sección
-        </button>
-
-        <p className={`text-16-medium font-semibold ${validacion.valido ? "text-verde-fuerte" : "text-rojo-fuerte"}`}>
-          {validacion.valido
-            ? "Suman 100% ✓"
-            : validacion.diferencia > 0
-              ? `Suman ${validacion.suma}% · faltan ${validacion.diferencia}%`
-              : `Suman ${validacion.suma}% · sobran ${Math.abs(validacion.diferencia)}%`}
-        </p>
-
+        <EditorSecciones secciones={borrador} onChange={setBorrador} />
         {mensaje && <p className="text-14-normal !text-black-300">{mensaje}</p>}
-
         <Button
           type="button"
           className="calcular_btn w-full !text-[20px] !p-4"
-          disabled={!validacion.valido || !camposOk || guardando}
+          disabled={!validacion.valido || !estructuraOk || guardando}
           onClick={guardar}
         >
           {guardando ? "Guardando…" : "Guardar esquema"}

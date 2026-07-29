@@ -8,10 +8,18 @@ import {
   formatearNota,
   nombreEvaluacion,
   validarSecciones,
-  type SeccionEvaluacion,
 } from "@/lib/calculos";
 import PanelObjetivo from "@/components/calculadora/PanelObjetivo";
-import { CLAVE_MATERIA_PUBLICA, plantillaInicial, type NotaUI, type SeccionUI } from "@/components/calculadora/tipos";
+import {
+  CLAVE_MATERIA_PUBLICA,
+  aEval,
+  esGrupo,
+  pesoEfectivo,
+  plantillaConLaboratorio,
+  plantillaInicial,
+  type NotaUI,
+  type SeccionUI,
+} from "@/components/calculadora/tipos";
 import { buscar as buscarTexto, normalizar } from "@/lib/texto";
 import { iniciarSesion } from "../nav-actions";
 import { buscarMateriasPublico, buscarProfesoresPublico } from "./actions";
@@ -22,12 +30,16 @@ const campo =
 
 const COLORES_SEG = ["#6E3E58", "#834D6B", "#9A5E7C", "#5A2F46", "#8F5878", "#A9708F", "#673A55"];
 
-function toEval(secciones: SeccionUI[]): SeccionEvaluacion[] {
-  return secciones.map((s) => ({
-    nombre: s.nombre,
-    porcentaje: s.porcentaje,
-    cantidad: s.cantidad,
-    notas: s.notas.map((n) => ({ puntaje: n.puntaje, puntajeMax: n.puntajeMax })),
+const toEval = aEval;
+
+// Notas vacías para una (sub)sección de la calculadora pública.
+function notasVaciasUI(prefijo: string, cantidad: number): NotaUI[] {
+  return Array.from({ length: cantidad }, (_, i) => ({
+    id: `${prefijo}-n${i + 1}-${Math.round(performance.now())}-${i}`,
+    orden: i + 1,
+    descripcion: null,
+    puntaje: null,
+    puntajeMax: 100,
   }));
 }
 
@@ -299,7 +311,14 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
   const porcentajes = secciones.map((s) => s.porcentaje);
   const validacion = validarSecciones(toEval(secciones));
   const esquemaOk =
-    validacion.valido && secciones.length > 0 && secciones.every((s) => s.nombre.trim() && s.cantidad >= 1);
+    validacion.valido &&
+    secciones.length > 0 &&
+    secciones.every((s) =>
+      s.nombre.trim() &&
+      (esGrupo(s)
+        ? (s.subsecciones ?? []).every((x) => x.nombre.trim() && x.cantidad >= 1)
+        : s.cantidad >= 1),
+    );
 
   function setPorcentajes(next: number[]) {
     setSecciones((prev) => prev.map((s, i) => ({ ...s, porcentaje: next[i] })));
@@ -359,10 +378,80 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
   }
   function editarNota(seccionId: string, notaId: string, cambio: Partial<NotaUI>) {
     setSecciones((prev) =>
-      prev.map((s) =>
-        s.id !== seccionId ? s : { ...s, notas: s.notas.map((n) => (n.id === notaId ? { ...n, ...cambio } : n)) },
-      ),
+      prev.map((s) => {
+        if (s.id === seccionId) {
+          return { ...s, notas: s.notas.map((n) => (n.id === notaId ? { ...n, ...cambio } : n)) };
+        }
+        if (s.subsecciones) {
+          return {
+            ...s,
+            subsecciones: s.subsecciones.map((sub) =>
+              sub.id === seccionId
+                ? { ...sub, notas: sub.notas.map((n) => (n.id === notaId ? { ...n, ...cambio } : n)) }
+                : sub,
+            ),
+          };
+        }
+        return s;
+      }),
     );
+  }
+
+  // ---- Laboratorio (subsecciones) ----
+  function setGrupo(i: number, on: boolean) {
+    setSecciones((prev) =>
+      prev.map((s, idx) => {
+        if (idx !== i) return s;
+        if (on) {
+          return {
+            ...s,
+            cantidad: 0,
+            notas: [],
+            profesorNombre: s.profesorNombre ?? null,
+            subsecciones: [
+              { id: `${s.id}-a`, nombre: "", porcentaje: 50, cantidad: 1, orden: 1, notas: notasVaciasUI(`${s.id}-a`, 1) },
+              { id: `${s.id}-b`, nombre: "", porcentaje: 50, cantidad: 1, orden: 2, notas: notasVaciasUI(`${s.id}-b`, 1) },
+            ],
+          };
+        }
+        return { ...s, subsecciones: undefined, cantidad: 1, notas: notasVaciasUI(s.id, 1) };
+      }),
+    );
+  }
+  function mapSub(i: number, fn: (subs: SeccionUI[]) => SeccionUI[]) {
+    setSecciones((prev) => prev.map((s, idx) => (idx === i ? { ...s, subsecciones: fn(s.subsecciones ?? []) } : s)));
+  }
+  function setSubCampo(i: number, j: number, cambio: Partial<SeccionUI>) {
+    mapSub(i, (subs) => subs.map((x, idx) => (idx === j ? { ...x, ...cambio } : x)));
+  }
+  function setSubCantidad(i: number, j: number, cRaw: number) {
+    const c = Math.max(1, Math.min(10, Math.round(cRaw)));
+    mapSub(i, (subs) =>
+      subs.map((x, idx) => {
+        if (idx !== j) return x;
+        const notas = [...x.notas];
+        while (notas.length < c) notas.push(notasVaciasUI(`${x.id}-x`, 1)[0]);
+        while (notas.length > c) notas.pop();
+        return { ...x, cantidad: c, notas: notas.map((n, k) => ({ ...n, orden: k + 1 })) };
+      }),
+    );
+  }
+  function setProfesorLab(i: number, v: string) {
+    setSecciones((prev) => prev.map((s, idx) => (idx === i ? { ...s, profesorNombre: v } : s)));
+  }
+  function agregarSub(i: number) {
+    mapSub(i, (subs) => {
+      const id = `${secciones[i].id}-${subs.length + 1}-${Math.round(performance.now())}`;
+      return [...subs, { id, nombre: "", porcentaje: 0, cantidad: 1, orden: subs.length + 1, notas: notasVaciasUI(id, 1) }];
+    });
+  }
+  function quitarSub(i: number, j: number) {
+    const subs = (secciones[i].subsecciones ?? []).filter((_, idx) => idx !== j);
+    if (subs.length < 2) setGrupo(i, false);
+    else mapSub(i, () => subs.map((x, k) => ({ ...x, orden: k + 1 })));
+  }
+  function usarPlantillaLab() {
+    setSecciones(plantillaConLaboratorio());
   }
 
   const estado = calcularEstadoMateria(toEval(secciones));
@@ -444,54 +533,166 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
             <BarraPesos nombres={nombres} porcentajes={porcentajes} onChange={setPorcentajes} />
 
             <div className="space-y-3">
-              {secciones.map((s, i) => (
-                <div key={s.id} className="tarjeta p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      className={campo}
-                      value={s.nombre}
-                      placeholder={`Sección ${i + 1}`}
-                      aria-label={`Nombre de la sección ${i + 1}`}
-                      onChange={(e) => setNombre(i, e.target.value)}
-                    />
-                    {secciones.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => quitarSeccion(i)}
-                        aria-label={`Quitar ${s.nombre || `sección ${i + 1}`}`}
-                        className="!text-rojo-fuerte font-bold px-2 text-20-medium"
-                      >
-                        ✕
-                      </button>
+              {secciones.map((s, i) => {
+                const grupo = esGrupo(s);
+                const subs = s.subsecciones ?? [];
+                const sumaSub = subs.reduce((a, x) => a + x.porcentaje, 0);
+                const subOk = Math.abs(100 - sumaSub) < 0.01;
+                return (
+                  <div key={s.id} className="tarjeta p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        className={campo}
+                        value={s.nombre}
+                        placeholder={`Sección ${i + 1}`}
+                        aria-label={`Nombre de la sección ${i + 1}`}
+                        onChange={(e) => setNombre(i, e.target.value)}
+                      />
+                      {secciones.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => quitarSeccion(i)}
+                          aria-label={`Quitar ${s.nombre || `sección ${i + 1}`}`}
+                          className="!text-rojo-fuerte font-bold px-2 text-20-medium"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <label className="flex items-center gap-2 text-14-normal text-tinta cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={grupo}
+                        onChange={(e) => setGrupo(i, e.target.checked)}
+                        className="accent-primary w-4 h-4"
+                      />
+                      Tiene laboratorio (subsecciones con su propio reparto)
+                    </label>
+
+                    {!grupo ? (
+                      <div className="flex items-center gap-3">
+                        <span className="text-14-normal !text-black-300 w-24 shrink-0">Evaluaciones</span>
+                        <input
+                          type="range"
+                          min={1}
+                          max={10}
+                          value={s.cantidad}
+                          onChange={(e) => setCantidad(i, Number(e.target.value))}
+                          aria-label={`Cantidad de evaluaciones en ${s.nombre || `sección ${i + 1}`}`}
+                          className="flex-1 accent-primary"
+                        />
+                        <span className="text-[18px] font-bold tabular-nums w-6 text-center">{s.cantidad}</span>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl bg-crema border border-hairline p-3 space-y-3">
+                        <div>
+                          <span className="block text-[11px] !text-black-300 mb-1">
+                            Profesor del laboratorio <span className="font-normal">(opcional)</span>
+                          </span>
+                          <input
+                            className={campo}
+                            value={s.profesorNombre ?? ""}
+                            placeholder="Distinto del de la materia"
+                            onChange={(e) => setProfesorLab(i, e.target.value)}
+                          />
+                        </div>
+                        <p className="text-14-normal !text-primary-ink bg-primary-100 rounded-lg px-3 py-2">
+                          Las subsecciones suman <strong>100% entre ellas</strong> (reparten el {s.porcentaje || 0}% de
+                          esta sección, no hasta ese número).
+                        </p>
+                        <div className="space-y-3">
+                          {subs.map((x, j) => (
+                            <div key={x.id} className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  className={campo}
+                                  value={x.nombre}
+                                  placeholder={`Subsección ${j + 1}`}
+                                  aria-label={`Nombre de la subsección ${j + 1}`}
+                                  onChange={(e) => setSubCampo(i, j, { nombre: e.target.value })}
+                                />
+                                <input
+                                  type="number"
+                                  className="w-16 shrink-0 border border-black/15 rounded-lg px-2 py-2 text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                  value={x.porcentaje}
+                                  min={0}
+                                  step={1}
+                                  aria-label={`Peso relativo de ${x.nombre || `subsección ${j + 1}`}`}
+                                  onChange={(e) => setSubCampo(i, j, { porcentaje: Number(e.target.value) })}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => quitarSub(i, j)}
+                                  className="!text-rojo-fuerte font-bold px-1 shrink-0"
+                                  aria-label={`Quitar subsección ${j + 1}`}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-14-normal !text-black-300 w-24 shrink-0">Evaluaciones</span>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={10}
+                                  value={x.cantidad}
+                                  onChange={(e) => setSubCantidad(i, j, Number(e.target.value))}
+                                  aria-label={`Cantidad de evaluaciones en ${x.nombre || `subsección ${j + 1}`}`}
+                                  className="flex-1 accent-primary"
+                                />
+                                <span className="text-[18px] font-bold tabular-nums w-6 text-center">{x.cantidad}</span>
+                              </div>
+                              <p className="text-[11px] !text-black-300 tabular-nums">
+                                = {Math.round(pesoEfectivo(s.porcentaje, x.porcentaje) * 100) / 100}% de la nota final
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => agregarSub(i)}
+                            className="text-14-normal !text-primary-ink font-semibold underline"
+                          >
+                            + Agregar subsección
+                          </button>
+                          <span
+                            className={`text-14-normal font-semibold tabular-nums ${
+                              subOk ? "!text-verde-fuerte" : "!text-rojo-fuerte"
+                            }`}
+                          >
+                            {subOk ? "suman 100% ✓" : `suman ${sumaSub}%`}
+                          </span>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-14-normal !text-black-300 w-24 shrink-0">Evaluaciones</span>
-                    <input
-                      type="range"
-                      min={1}
-                      max={10}
-                      value={s.cantidad}
-                      onChange={(e) => setCantidad(i, Number(e.target.value))}
-                      aria-label={`Cantidad de evaluaciones en ${s.nombre || `sección ${i + 1}`}`}
-                      className="flex-1 accent-primary"
-                    />
-                    <span className="text-[18px] font-bold tabular-nums w-6 text-center">{s.cantidad}</span>
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={agregarSeccion}
-                className="text-16-medium !text-primary-ink font-semibold underline"
-              >
-                + Agregar sección
-              </button>
+                );
+              })}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={agregarSeccion}
+                  className="text-16-medium !text-primary-ink font-semibold underline"
+                >
+                  + Agregar sección
+                </button>
+                <button
+                  type="button"
+                  onClick={usarPlantillaLab}
+                  className="text-14-normal !text-primary-ink font-semibold bg-primary-100 rounded-lg px-3 py-1.5"
+                >
+                  Usar plantilla “Materia con laboratorio”
+                </button>
+              </div>
             </div>
 
             {!validacion.valido && (
               <p className="text-14-normal !text-rojo-fuerte">
-                Los pesos deben sumar 100 (van {validacion.suma}). Usa la barra o “repartir equitativo”.
+                {validacion.subseccionesInvalidas.length > 0 && Math.abs(validacion.diferencia) < 0.01
+                  ? `Revisa las subsecciones de “${validacion.subseccionesInvalidas[0].nombre}”: suman ${validacion.subseccionesInvalidas[0].suma}%, deben sumar 100.`
+                  : `Los pesos deben sumar 100 (van ${validacion.suma}). Usa la barra o “repartir equitativo”.`}
               </p>
             )}
           </div>
@@ -503,7 +704,7 @@ export default function AsistenteCalculadora({ universidades }: { universidades:
             seccion={secciones[seccionActual]}
             indice={seccionActual}
             total={secciones.length}
-            onEditar={(notaId, cambio) => editarNota(secciones[seccionActual].id, notaId, cambio)}
+            onEditarNota={editarNota}
           />
         )}
 
@@ -608,13 +809,16 @@ function PasoNotas({
   seccion,
   indice,
   total,
-  onEditar,
+  onEditarNota,
 }: {
   seccion: SeccionUI;
   indice: number;
   total: number;
-  onEditar: (notaId: string, cambio: Partial<NotaUI>) => void;
+  onEditarNota: (seccionId: string, notaId: string, cambio: Partial<NotaUI>) => void;
 }) {
+  const grupo = esGrupo(seccion);
+  const subs = seccion.subsecciones ?? [];
+
   return (
     <div className="space-y-5">
       <div>
@@ -627,59 +831,91 @@ function PasoNotas({
         </p>
       </div>
 
-      <div className="space-y-3">
-        {seccion.notas.map((n) => {
-          const pendiente = n.puntaje === null;
-          return (
-            <div key={n.id} className={`tarjeta p-4 ${pendiente ? "border-dashed" : ""}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-16-medium font-semibold">
-                    {nombreEvaluacion(seccion.nombre, n.orden, seccion.cantidad)}
-                  </p>
-                  {pendiente && <p className="text-14-normal !text-black-300">Pendiente</p>}
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    placeholder="—"
-                    aria-label={`Nota de ${nombreEvaluacion(seccion.nombre, n.orden, seccion.cantidad)}`}
-                    value={n.puntaje ?? ""}
-                    min={0}
-                    max={n.puntajeMax}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (raw === "") return onEditar(n.id, { puntaje: null });
-                      const v = Number(raw);
-                      if (!Number.isNaN(v)) onEditar(n.id, { puntaje: v });
-                    }}
-                    className={`w-20 text-center border rounded-lg px-2 py-2 tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 ${
-                      pendiente ? "border-dashed border-black/30 bg-crema" : "border-black/15 bg-white"
-                    }`}
-                  />
-                  <span className="text-16-medium !text-black-300">/</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    aria-label={`Puntaje máximo de ${nombreEvaluacion(seccion.nombre, n.orden, seccion.cantidad)}`}
-                    value={n.puntajeMax}
-                    min={1}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      if (Number.isFinite(v) && v > 0) onEditar(n.id, { puntajeMax: v });
-                    }}
-                    className="w-16 text-center border border-black/15 rounded-lg px-2 py-2 tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                </div>
+      {grupo ? (
+        <div className="space-y-5">
+          {subs.map((sub) => (
+            <div key={sub.id} className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <p className="text-16-medium font-semibold text-tinta">{sub.nombre || "Subsección"}</p>
+                <p className="text-[11px] !text-black-300 tabular-nums">
+                  {Math.round(pesoEfectivo(seccion.porcentaje, sub.porcentaje) * 100) / 100}% de la nota final
+                </p>
+              </div>
+              <div className="space-y-3">
+                {sub.notas.map((n) => (
+                  <FilaNota key={n.id} seccion={sub} nota={n} onEditar={(c) => onEditarNota(sub.id, n.id, c)} />
+                ))}
               </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {seccion.notas.map((n) => (
+            <FilaNota key={n.id} seccion={seccion} nota={n} onEditar={(c) => onEditarNota(seccion.id, n.id, c)} />
+          ))}
+        </div>
+      )}
+
       <p className="text-14-normal !text-black-300">
         ¿Aún no tienes notas aquí? Puedes saltar la sección con “Siguiente”.
       </p>
+    </div>
+  );
+}
+
+function FilaNota({
+  seccion,
+  nota: n,
+  onEditar,
+}: {
+  seccion: SeccionUI;
+  nota: NotaUI;
+  onEditar: (cambio: Partial<NotaUI>) => void;
+}) {
+  const pendiente = n.puntaje === null;
+  const etiqueta = nombreEvaluacion(seccion.nombre, n.orden, seccion.cantidad);
+  return (
+    <div className={`tarjeta p-4 ${pendiente ? "border-dashed" : ""}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-16-medium font-semibold">{etiqueta}</p>
+          {pendiente && <p className="text-14-normal !text-black-300">Pendiente</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            placeholder="—"
+            aria-label={`Nota de ${etiqueta}`}
+            value={n.puntaje ?? ""}
+            min={0}
+            max={n.puntajeMax}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") return onEditar({ puntaje: null });
+              const v = Number(raw);
+              if (!Number.isNaN(v)) onEditar({ puntaje: v });
+            }}
+            className={`w-20 text-center border rounded-lg px-2 py-2 tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+              pendiente ? "border-dashed border-black/30 bg-crema" : "border-black/15 bg-white"
+            }`}
+          />
+          <span className="text-16-medium !text-black-300">/</span>
+          <input
+            type="number"
+            inputMode="decimal"
+            aria-label={`Puntaje máximo de ${etiqueta}`}
+            value={n.puntajeMax}
+            min={1}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isFinite(v) && v > 0) onEditar({ puntajeMax: v });
+            }}
+            className="w-16 text-center border border-black/15 rounded-lg px-2 py-2 tabular-nums bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </div>
+      </div>
     </div>
   );
 }

@@ -6,8 +6,15 @@ import { Button } from "@/components/ui/button";
 import { esCalificable, nombrePeriodo, validarSecciones, type TipoPeriodo } from "@/lib/calculos";
 import { crearCurso, type EstadoCrearCurso } from "../actions";
 import { nombreTipoPeriodo } from "../periodo";
-import { CLAVE_MATERIA_PUBLICA } from "@/components/calculadora/tipos";
-import { normalizar } from "@/lib/texto";
+import {
+  CLAVE_MATERIA_PUBLICA,
+  borradorAEval,
+  esGrupo,
+  seccionesUIaBorrador,
+  type BorradorSeccion,
+  type SeccionUI,
+} from "@/components/calculadora/tipos";
+import EditorSecciones from "@/components/calculadora/EditorSecciones";
 import SelectorMateria from "./SelectorMateria";
 
 export type MateriaOpcion = {
@@ -22,13 +29,11 @@ export type MateriaOpcion = {
   faltanPrereqs: string[]; // códigos de prerequisitos no aprobados
 };
 
-type Fila = { nombre: string; porcentaje: number; cantidad: number };
-
-// Plantilla inicial sugerida.
-const PLANTILLA: Fila[] = [
-  { nombre: "Parciales", porcentaje: 40, cantidad: 2 },
-  { nombre: "Talleres", porcentaje: 30, cantidad: 3 },
-  { nombre: "Examen final", porcentaje: 30, cantidad: 1 },
+// Plantilla inicial sugerida (árbol de secciones para el editor).
+const PLANTILLA: BorradorSeccion[] = [
+  { id: "s1", nombre: "Parciales", porcentaje: 40, cantidad: 2 },
+  { id: "s2", nombre: "Talleres", porcentaje: 30, cantidad: 3 },
+  { id: "s3", nombre: "Examen final", porcentaje: 30, cantidad: 1 },
 ];
 
 const campo =
@@ -57,20 +62,18 @@ export default function AgregarMateriaForm({
   );
 
   const [materiaPlanId, setMateriaPlanId] = useState("");
-  const [filas, setFilas] = useState<Fila[]>(PLANTILLA);
+  const [secciones, setSecciones] = useState<BorradorSeccion[]>(PLANTILLA);
 
   // Recuperación: precarga el esquema que el visitante armó sin cuenta (guardado
-  // en localStorage por la calculadora pública). Solo el esquema; las notas se
-  // capturan en la calculadora de la materia.
+  // en localStorage por la calculadora pública), incluyendo el laboratorio. Solo
+  // el esquema; las notas se capturan en la calculadora de la materia.
   useEffect(() => {
     if (!recuperar) return;
     try {
       const raw = window.localStorage.getItem(CLAVE_MATERIA_PUBLICA);
       if (!raw) return;
-      const g = JSON.parse(raw) as { secciones?: { nombre: string; porcentaje: number; cantidad: number }[] };
-      if (g.secciones?.length) {
-        setFilas(g.secciones.map((s) => ({ nombre: s.nombre, porcentaje: s.porcentaje, cantidad: s.cantidad })));
-      }
+      const g = JSON.parse(raw) as { secciones?: SeccionUI[] };
+      if (g.secciones?.length) setSecciones(seccionesUIaBorrador(g.secciones));
       window.localStorage.removeItem(CLAVE_MATERIA_PUBLICA);
     } catch {
       /* localStorage no disponible */
@@ -91,30 +94,17 @@ export default function AgregarMateriaForm({
         .join(" · ")
     : "";
 
-  // validarSecciones sólo usa el porcentaje; se completa la forma con notas: [].
-  const validacion = validarSecciones(
-    filas.map((f) => ({ nombre: f.nombre, porcentaje: f.porcentaje, cantidad: f.cantidad, notas: [] })),
-  );
-
-  const filasIncompletas = filas.some((f) => !f.nombre.trim() || f.cantidad < 1);
+  const validacion = validarSecciones(borradorAEval(secciones));
+  const estructuraOk =
+    secciones.length > 0 &&
+    secciones.every((s) =>
+      s.nombre.trim() && s.porcentaje > 0 &&
+      (esGrupo(s)
+        ? (s.subsecciones ?? []).every((x) => x.nombre.trim() && x.porcentaje > 0 && x.cantidad >= 1)
+        : Number.isInteger(s.cantidad) && s.cantidad >= 1),
+    );
   const bloquearEnvio =
-    !materia || pendiente || (calificable && (!validacion.valido || filasIncompletas || filas.length === 0));
-
-  function setFila(i: number, cambio: Partial<Fila>) {
-    setFilas((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...cambio } : f)));
-  }
-  function agregarFila() {
-    setFilas((prev) => {
-      const nueva: Fila = { nombre: "", porcentaje: 0, cantidad: 1 };
-      // El examen final va siempre al final: la nueva sección entra antes de él.
-      // (el `orden` se persiste por índice de arreglo al crear el curso).
-      const idxFinal = prev.reduce((acc, f, i) => (normalizar(f.nombre).includes("final") ? i : acc), -1);
-      return idxFinal >= 0 ? [...prev.slice(0, idxFinal), nueva, ...prev.slice(idxFinal)] : [...prev, nueva];
-    });
-  }
-  function quitarFila(i: number) {
-    setFilas((prev) => prev.filter((_, idx) => idx !== i));
-  }
+    !materia || pendiente || (calificable && (!validacion.valido || !estructuraOk));
 
   return (
     <form
@@ -201,78 +191,10 @@ export default function AgregarMateriaForm({
 
       {materia && calificable && (
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <label className="block text-16-medium font-semibold">Esquema de evaluación</label>
-            <button
-              type="button"
-              onClick={agregarFila}
-              className="text-16-medium font-semibold !text-primary-ink underline"
-            >
-              + Agregar sección
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {filas.map((f, i) => (
-              <div key={i} className="flex flex-wrap items-end gap-2">
-                <div className="flex-1 min-w-[140px]">
-                  <span className="block text-14-normal !text-black-300 mb-1">Sección</span>
-                  <input
-                    className={campo}
-                    value={f.nombre}
-                    onChange={(e) => setFila(i, { nombre: e.target.value })}
-                    placeholder="Nombre"
-                  />
-                </div>
-                <div className="w-24">
-                  <span className="block text-14-normal !text-black-300 mb-1">%</span>
-                  <input
-                    type="number"
-                    className={campo}
-                    value={f.porcentaje}
-                    min={0}
-                    step={1}
-                    onChange={(e) => setFila(i, { porcentaje: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="w-24">
-                  <span className="block text-14-normal !text-black-300 mb-1"># notas</span>
-                  <input
-                    type="number"
-                    className={campo}
-                    value={f.cantidad}
-                    min={1}
-                    step={1}
-                    onChange={(e) => setFila(i, { cantidad: Number(e.target.value) })}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => quitarFila(i)}
-                  className="text-16-medium font-semibold !text-rojo-fuerte pb-3 px-1"
-                  aria-label="Eliminar sección"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {/* Feedback en vivo de la suma */}
-          <p
-            className={`text-16-medium font-semibold mt-3 ${
-              validacion.valido ? "!text-verde-fuerte" : "!text-rojo-fuerte"
-            }`}
-          >
-            {validacion.valido
-              ? `Suman 100% ✓`
-              : validacion.diferencia > 0
-                ? `Suman ${validacion.suma}% · faltan ${validacion.diferencia}%`
-                : `Suman ${validacion.suma}% · sobran ${Math.abs(validacion.diferencia)}%`}
-          </p>
-
-          {/* Secciones serializadas para el Server Action */}
-          <input type="hidden" name="secciones" value={JSON.stringify(filas)} readOnly />
+          <label className="block text-16-medium font-semibold mb-3">Esquema de evaluación</label>
+          <EditorSecciones secciones={secciones} onChange={setSecciones} profesores={profesores} />
+          {/* Árbol de secciones serializado para el Server Action */}
+          <input type="hidden" name="secciones" value={JSON.stringify(secciones)} readOnly />
         </div>
       )}
 

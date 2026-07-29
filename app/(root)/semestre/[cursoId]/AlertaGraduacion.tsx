@@ -7,17 +7,18 @@ import {
   calcularEstadoMateria,
   habilitaGraduacion,
   proyectar,
-  type SeccionEvaluacion,
 } from "@/lib/calculos";
-import type { SeccionUI } from "@/components/calculadora/tipos";
+import { aEval, type SeccionUI } from "@/components/calculadora/tipos";
 
-function toEval(secciones: SeccionUI[]): SeccionEvaluacion[] {
-  return secciones.map((s) => ({
-    nombre: s.nombre,
-    porcentaje: s.porcentaje,
-    cantidad: s.cantidad,
-    notas: s.notas.map((n) => ({ puntaje: n.puntaje, puntajeMax: n.puntajeMax })),
-  }));
+const toEval = aEval;
+
+// ¿Hay al menos una nota registrada, contando las de laboratorio (subsecciones)?
+function tieneAlgunaNota(secciones: SeccionUI[]): boolean {
+  return secciones.some(
+    (s) =>
+      s.notas.some((n) => n.puntaje !== null) ||
+      (s.subsecciones ?? []).some((sub) => sub.notas.some((n) => n.puntaje !== null)),
+  );
 }
 
 // Alerta de bloqueo de graduación para una materia FUNDAMENTAL en curso. En la
@@ -37,8 +38,7 @@ export default function AlertaGraduacion({
 }) {
   if (!fundamental) return null;
 
-  const hayNota = secciones.some((s) => s.notas.some((n) => n.puntaje !== null));
-  if (!hayNota) return null;
+  if (!tieneAlgunaNota(secciones)) return null;
 
   const evaluaciones = toEval(secciones);
   const estado = calcularEstadoMateria(evaluaciones);

@@ -9,6 +9,19 @@ import type { SeccionData } from "./tipos";
 
 type EstadoGuardado = "idle" | "guardando" | "guardado" | "error";
 
+// Busca una nota por id en el árbol (secciones y subsecciones de laboratorio).
+function buscarNota(secciones: SeccionUI[], notaId: string): NotaUI | undefined {
+  for (const s of secciones) {
+    const propia = s.notas.find((n) => n.id === notaId);
+    if (propia) return propia;
+    for (const sub of s.subsecciones ?? []) {
+      const f = sub.notas.find((n) => n.id === notaId);
+      if (f) return f;
+    }
+  }
+  return undefined;
+}
+
 // Envoltura interna: dueña del estado y de la PERSISTENCIA (por Curso). La UI de
 // captura vive en el componente compartido <Calculadora> (mismo que la pública).
 export default function CalculadoraMateria({
@@ -47,25 +60,29 @@ export default function CalculadoraMateria({
   }
 
   function editarNota(seccionId: string, notaId: string, cambio: Partial<NotaUI>) {
-    setSecciones((prev) =>
-      prev.map((s) =>
-        s.id !== seccionId ? s : { ...s, notas: s.notas.map((n) => (n.id === notaId ? { ...n, ...cambio } : n)) },
-      ),
-    );
+    // El id de sección puede ser de una subsección (laboratorio): se busca en
+    // ambos niveles.
+    const actualizar = (s: SeccionUI): SeccionUI =>
+      s.id === seccionId
+        ? { ...s, notas: s.notas.map((n) => (n.id === notaId ? { ...n, ...cambio } : n)) }
+        : s.subsecciones
+          ? {
+              ...s,
+              subsecciones: s.subsecciones.map((sub) =>
+                sub.id === seccionId
+                  ? { ...sub, notas: sub.notas.map((n) => (n.id === notaId ? { ...n, ...cambio } : n)) }
+                  : sub,
+              ),
+            }
+          : s;
+    setSecciones((prev) => prev.map(actualizar));
     const previo = timers.current.get(notaId);
     if (previo) clearTimeout(previo);
     timers.current.set(
       notaId,
       setTimeout(() => {
         timers.current.delete(notaId);
-        let nota: NotaUI | undefined;
-        for (const s of seccionesRef.current) {
-          const f = s.notas.find((n) => n.id === notaId);
-          if (f) {
-            nota = f;
-            break;
-          }
-        }
+        const nota = buscarNota(seccionesRef.current, notaId);
         if (nota) void persistir(notaId, nota.puntaje, nota.puntajeMax, nota.descripcion);
       }, 600),
     );
@@ -77,14 +94,7 @@ export default function CalculadoraMateria({
       const t = timers.current.get(id);
       if (t) clearTimeout(t);
       timers.current.delete(id);
-      let nota: NotaUI | undefined;
-      for (const s of seccionesRef.current) {
-        const f = s.notas.find((n) => n.id === id);
-        if (f) {
-          nota = f;
-          break;
-        }
-      }
+      const nota = buscarNota(seccionesRef.current, id);
       if (nota) await persistir(id, nota.puntaje, nota.puntajeMax, nota.descripcion);
     }
   }
