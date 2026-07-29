@@ -80,21 +80,41 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
   const periodoLabel = nombrePeriodo(curso.periodo.anio, curso.periodo.tipo as TipoPeriodo);
 
   const encabezado = (
-    <div className="mb-8">
-      <Link href="/semestre" className="text-16-medium text-blue-800 underline">
-        ← Mi semestre
+    <header className="mb-6">
+      {/* Navegación discreta, no acción primaria: dice a dónde va (no "Salir",
+          que se confunde con cerrar sesión). Área táctil cómoda (44 px). */}
+      <Link
+        href="/semestre"
+        className="inline-flex items-center gap-1.5 min-h-[44px] px-3.5 rounded-xl bg-primary-100 text-14-normal font-semibold !text-primary-ink hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        Volver a mi semestre
       </Link>
-      <h1 className="text-30-bold mt-3">{curso.materia.nombre}</h1>
-      <p className="text-16-medium text-black-300 mt-1">
+
+      {/* El nombre de la materia es el título; el resto son metadatos que no
+          compiten. */}
+      <h1 className="text-30-bold mt-4 text-tinta">{curso.materia.nombre}</h1>
+      <p className="text-[14px] !text-black-300 mt-1.5">
         {curso.materia.codigo} · {curso.creditos} créditos
         {curso.profesor ? ` · ${curso.profesor.nombre}` : " · Sin profesor"} · {periodoLabel}
       </p>
       {curso.fundamental && (
-        <span className="inline-block mt-3 text-14-normal !text-white bg-blue-800 rounded-full px-3 py-1">
+        <span className="inline-flex items-center mt-3 text-[13px] font-semibold !text-ambar-fuerte bg-ambar-suave border border-ambar-fuerte/30 rounded-full px-3 py-1">
           Materia fundamental
         </span>
       )}
-    </div>
+    </header>
   );
 
   // Materias sin créditos (seminario, nivelación): no hay calculadora.
@@ -103,13 +123,13 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
     return (
       <section className="section_container max-w-2xl">
         {encabezado}
-        <div className="border-2 border-black rounded-2xl p-6 bg-white">
+        <div className="tarjeta p-6">
           <p className="text-16-medium">
             Esta materia no tiene créditos: es un requisito que se aprueba, pero no se califica en
             la escala numérica. No entra al índice.
           </p>
           {aprobada ? (
-            <p className="text-20-medium font-bold text-green-700 mt-4">Aprobada ✓</p>
+            <p className="text-20-medium font-bold !text-verde-fuerte mt-4">Aprobada ✓</p>
           ) : (
             <form action={marcarAprobada.bind(null, curso.id)} className="mt-5">
               <Button type="submit" className="calcular_btn w-full">
@@ -127,7 +147,7 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
     return (
       <section className="section_container max-w-2xl">
         {encabezado}
-        <div className="border-2 border-black rounded-2xl p-6 bg-white space-y-4">
+        <div className="tarjeta p-6 space-y-4">
           {curso.estado === "RETIRADO" ? (
             <p className="text-20-medium font-bold">Materia retirada</p>
           ) : (
@@ -155,7 +175,7 @@ export default async function CursoPage({ params }: { params: Promise<{ cursoId:
           <form action={reabrirCurso.bind(null, curso.id)}>
             <button
               type="submit"
-              className="w-full border-2 border-black bg-white rounded-xl py-3 text-16-medium font-semibold"
+              className="w-full border-2 border-black/15 bg-white !text-tinta rounded-2xl py-3 text-16-medium font-semibold shadow-suave hover:border-primary/40 transition-colors"
             >
               Reabrir para corregir
             </button>
