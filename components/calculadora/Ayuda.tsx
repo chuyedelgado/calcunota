@@ -104,7 +104,7 @@ export default function Ayuda({
           id={panelId}
           role="tooltip"
           style={estilo}
-          className={`absolute z-50 rounded-xl border border-hairline bg-white p-3 text-left shadow-[0_12px_30px_-14px_rgba(42,36,31,0.35)] ${
+          className={`absolute z-50 rounded-xl border border-hairline bg-white p-3 text-left normal-case tracking-normal shadow-[0_12px_30px_-14px_rgba(42,36,31,0.35)] ${
             arriba ? "bottom-full mb-2" : "top-full mt-2"
           }`}
         >
