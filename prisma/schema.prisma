@@ -267,6 +267,7 @@ model Profesor {
   universidad Universidad @relation(fields: [universidadId], references: [id], onDelete: Cascade)
   facultad    Facultad?   @relation(fields: [facultadId], references: [id])
   cursos      Curso[]
+  secciones   Seccion[]
 
   @@unique([universidadId, nombre])
   @@index([nombre])
@@ -358,10 +359,25 @@ model Seccion {
   cantidad   Int
   orden      Int    @default(0)
 
+  /// Anidamiento: una sección puede repartirse en subsecciones (ej. el
+  /// laboratorio de Física, 25% de la materia, con sus propios parciales,
+  /// informes, quices y asistencia). El `porcentaje` de una subsección es
+  /// RELATIVO a su padre: las subsecciones suman 100 entre ellas. Una sección
+  /// con subsecciones no tiene notas propias.
+  seccionPadreId String?
+  seccionPadre   Seccion?  @relation("Subsecciones", fields: [seccionPadreId], references: [id], onDelete: Cascade)
+  subsecciones   Seccion[] @relation("Subsecciones")
+
+  /// Profesor de esta sección, distinto del de la materia (ej. el laboratorio
+  /// lo imparte otro docente). Importante para el motor de probabilidades.
+  profesorId String?
+  profesor   Profesor? @relation(fields: [profesorId], references: [id])
+
   curso Curso  @relation(fields: [cursoId], references: [id], onDelete: Cascade)
   notas Nota[]
 
   @@index([cursoId])
+  @@index([seccionPadreId])
 }
 
 /// `puntaje` en null significa PENDIENTE, no cero. Esa distinción es la
