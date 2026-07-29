@@ -643,7 +643,17 @@ export function nombreEvaluacion(
 
 export type Exigencia = "holgado" | "en linea" | "exigente" | "muy exigente";
 
+/** Meta que el estudiante fijó a mano y que no se debe redistribuir. */
+export type MetaFijada = {
+  seccionIndice: number;
+  orden: number;
+  /** Puntaje en la escala real de la evaluación */
+  puntaje: number;
+};
+
 export type MetaEvaluacion = {
+  /** true si el estudiante fijó esta nota a mano */
+  fijada: boolean;
   seccionIndice: number;
   seccionNombre: string;
   /** Posición dentro de la sección, base 1 */
@@ -665,6 +675,8 @@ export type PlanObjetivo = {
   objetivo: number;
   alcanzable: boolean;
   yaAlcanzado: boolean;
+  /** Nota más alta posible dadas las metas fijadas y lo ya obtenido */
+  techoAlcanzable: number;
   /** Promedio simple necesario, para comparar con el reparto */
   promedioNecesario: number | null;
   metas: MetaEvaluacion[];
@@ -693,13 +705,16 @@ function clasificar(meta: number, referencia: number): Exigencia {
  */
 export function distribuirObjetivo(
   seccionesEntrada: SeccionEvaluacion[],
-  objetivo: number
+  objetivo: number,
+  fijadas: MetaFijada[] = []
 ): PlanObjetivo {
   const secciones = aplanarSecciones(seccionesEntrada);
   const estado = calcularEstadoMateria(secciones);
-  const faltante = objetivo - estado.notaActual;
 
   type Pendiente = {
+    fijada: boolean;
+    puntajeFijado: number | null;
+    topeAlcanzado?: boolean;
     seccionIndice: number;
     seccionNombre: string;
     orden: number;
@@ -708,7 +723,6 @@ export function distribuirObjetivo(
     puntajeMax: number;
     referencia: number;
     meta: number;
-    fijada: boolean;
   };
 
   // Desempeño global, como respaldo cuando una sección no tiene notas aún
@@ -731,7 +745,12 @@ export function distribuirObjetivo(
     for (let i = 0; i < seccion.cantidad; i++) {
       const nota = seccion.notas[i];
       if (nota && nota.puntaje !== null) continue;
+      const fijada = fijadas.find(
+        (f) => f.seccionIndice === si && f.orden === i + 1
+      );
       pendientes.push({
+        fijada: fijada !== undefined,
+        puntajeFijado: fijada?.puntaje ?? null,
         seccionIndice: si,
         seccionNombre: seccion.nombre,
         orden: i + 1,
@@ -740,18 +759,67 @@ export function distribuirObjetivo(
         puntajeMax: nota?.puntajeMax ?? 100,
         referencia: Math.max(1, Math.min(100, referencia)),
         meta: 0,
-        fijada: false,
       });
     }
   });
 
+  // Aporte de las metas que el estudiante fijó a mano
+  const fijadasList = pendientes.filter((p) => p.fijada);
+  const libres = pendientes.filter((p) => !p.fijada);
+
+  const aporteFijado = fijadasList.reduce(
+    (a, p) =>
+      a +
+      (p.puntajeMax > 0
+        ? (Math.min(p.puntajeMax, Math.max(0, p.puntajeFijado ?? 0)) /
+            p.puntajeMax) *
+          p.peso
+        : 0),
+    0
+  );
+
+  // Techo real: lo asegurado, más lo fijado, más el máximo de lo que queda libre
+  const techoAlcanzable =
+    estado.notaActual + aporteFijado + libres.reduce((a, p) => a + p.peso, 0);
+
+  const construirMetas = (
+    valores: Map<Pendiente, number>
+  ): MetaEvaluacion[] =>
+    pendientes.map((p) => {
+      const puntaje = valores.get(p) ?? 0;
+      const enCien = p.puntajeMax > 0 ? (puntaje / p.puntajeMax) * 100 : 0;
+      return {
+        fijada: p.fijada,
+        seccionIndice: p.seccionIndice,
+        seccionNombre: p.seccionNombre,
+        orden: p.orden,
+        etiqueta: p.etiqueta,
+        peso: p.peso,
+        meta: enCien,
+        metaEnPuntaje: puntaje,
+        puntajeMax: p.puntajeMax,
+        referencia: Math.round(p.referencia * 10) / 10,
+        exigencia: clasificar(enCien, p.referencia),
+      };
+    });
+
+  const valoresFijados = new Map<Pendiente, number>();
+  for (const p of fijadasList) {
+    valoresFijados.set(
+      p,
+      Math.min(p.puntajeMax, Math.max(0, Math.round(p.puntajeFijado ?? 0)))
+    );
+  }
+
   if (estado.notaActual >= objetivo) {
+    for (const p of libres) valoresFijados.set(p, 0);
     return {
       objetivo,
       alcanzable: true,
       yaAlcanzado: true,
+      techoAlcanzable,
       promedioNecesario: 0,
-      metas: pendientes.map((p) => ({ ...p, meta: 0, metaEnPuntaje: 0, exigencia: "holgado" as Exigencia })),
+      metas: construirMetas(valoresFijados),
       mensaje: "Ya aseguraste este objetivo. Lo que falte no lo cambia.",
     };
   }
@@ -761,134 +829,128 @@ export function distribuirObjetivo(
       objetivo,
       alcanzable: false,
       yaAlcanzado: false,
+      techoAlcanzable,
       promedioNecesario: null,
       metas: [],
       mensaje: "No quedan evaluaciones pendientes. La nota ya está definida.",
     };
   }
 
-  const pesoRestante = pendientes.reduce((a, p) => a + p.peso, 0);
-  const promedioNecesario = techo((faltante / pesoRestante) * 100);
+  const pesoRestante = libres.reduce((a, p) => a + p.peso, 0);
+  const faltanteLibre = objetivo - estado.notaActual - aporteFijado;
+  const promedioNecesario =
+    pesoRestante > 0 ? techo((faltanteLibre / pesoRestante) * 100) : null;
 
-  // Si ni con 100 en todo lo pendiente se llega, no hay reparto posible.
-  if (estado.notaMaxima < objetivo - 0.001) {
+  // ¿Se puede llegar, dadas las notas ya fijadas?
+  if (techoAlcanzable < objetivo - 0.001) {
+    for (const p of libres) valoresFijados.set(p, p.puntajeMax);
+    const hayFijadas = fijadasList.length > 0;
     return {
       objetivo,
       alcanzable: false,
       yaAlcanzado: false,
+      techoAlcanzable,
       promedioNecesario,
-      metas: pendientes.map((p) => ({
-        seccionIndice: p.seccionIndice,
-        seccionNombre: p.seccionNombre,
-        orden: p.orden,
-        etiqueta: p.etiqueta,
-        peso: p.peso,
-        meta: 100,
-        metaEnPuntaje: p.puntajeMax,
-        puntajeMax: p.puntajeMax,
-        referencia: Math.round(p.referencia * 10) / 10,
-        exigencia: "muy exigente" as Exigencia,
-      })),
-      mensaje: `Aunque saques 100 en todo lo que falta, el máximo alcanzable es ${estado.notaMaxima.toFixed(1)}.`,
+      metas: construirMetas(valoresFijados),
+      mensaje: hayFijadas
+        ? `Con las notas que fijaste ya no se llega a ${objetivo}. Aunque saques ` +
+          `el máximo en todo lo demás, el techo queda en ${techoAlcanzable.toFixed(1)}.`
+        : `Aunque saques el máximo en todo lo que falta, el techo es ` +
+          `${techoAlcanzable.toFixed(1)}.`,
     };
   }
 
-  // Reparto proporcional con tope en 100 y redistribución iterativa
-  let porRepartir = faltante;
-  let libres = [...pendientes];
+  // Si lo fijado ya cubre el objetivo, lo libre no necesita nada
+  if (faltanteLibre <= 0.001 || libres.length === 0) {
+    for (const p of libres) valoresFijados.set(p, 0);
+    return {
+      objetivo,
+      alcanzable: true,
+      yaAlcanzado: false,
+      techoAlcanzable,
+      promedioNecesario: 0,
+      metas: construirMetas(valoresFijados),
+      mensaje:
+        fijadasList.length > 0
+          ? "Con las notas que fijaste ya alcanzas el objetivo."
+          : "Ya aseguraste este objetivo.",
+    };
+  }
 
-  for (let vuelta = 0; vuelta < 20 && libres.length > 0; vuelta++) {
-    const base = libres.reduce((a, p) => a + (p.peso * p.referencia) / 100, 0);
+  // Reparto proporcional al desempeño, solo entre las libres
+  let porRepartir = faltanteLibre;
+  let disponibles = [...libres];
+  for (const p of libres) p.meta = 0;
+
+  for (let vuelta = 0; vuelta < 20 && disponibles.length > 0; vuelta++) {
+    const base = disponibles.reduce(
+      (a, p) => a + (p.peso * p.referencia) / 100,
+      0
+    );
     if (base <= 0) break;
-
     const k = porRepartir / base;
     let seFijoAlguna = false;
-
-    for (const p of libres) {
+    for (const p of disponibles) {
       const propuesta = p.referencia * k;
       if (propuesta > 100) {
         p.meta = 100;
-        p.fijada = true;
-        porRepartir -= (p.peso * 100) / 100;
+        p.topeAlcanzado = true;
+        porRepartir -= p.peso;
         seFijoAlguna = true;
       } else {
         p.meta = Math.max(0, propuesta);
       }
     }
-
     if (!seFijoAlguna) break;
-    libres = libres.filter((p) => !p.fijada);
+    disponibles = disponibles.filter((p) => !p.topeAlcanzado);
   }
 
-  // ------------------------------------------------------------
-  // Conversión a metas ENTERAS
-  //
-  // Una nota no puede ser 62.5: se saca 62 o 63. Y como truncar dejaría al
-  // estudiante corto del objetivo, hay que subir. Pero subir todas las metas
-  // al entero siguiente pediría más de lo necesario, así que se reparte:
-  // se trunca cada una y luego se sube de a uno, empezando por las que quedaron
-  // más cerca del siguiente entero (método del mayor residuo), hasta alcanzar
-  // exactamente el objetivo.
-  //
-  // El entero va sobre el PUNTAJE REAL de cada evaluación: si el parcial es
-  // sobre 40, las notas posibles son 33 o 34, no 33.5.
-  // ------------------------------------------------------------
-
-  const enteros = pendientes.map((p) => {
+  // Enteros por mayor residuo, solo sobre las libres
+  const enteros = libres.map((p) => {
     const crudo = (Math.min(100, p.meta) / 100) * p.puntajeMax;
     const base = Math.min(p.puntajeMax, Math.max(0, Math.floor(crudo + 1e-9)));
     return { p, puntaje: base, residuo: crudo - base };
   });
 
-  /** Cuánto aporta a la nota final el conjunto actual de metas enteras. */
-  const aporte = () =>
+  const aporteLibre = () =>
     enteros.reduce(
       (a, e) =>
         a + (e.p.puntajeMax > 0 ? (e.puntaje / e.p.puntajeMax) * e.p.peso : 0),
       0
     );
 
-  // Sube de a un punto, priorizando el residuo mayor, hasta cubrir el faltante
   const orden = [...enteros].sort((a, b) => b.residuo - a.residuo);
-  let vuelta = 0;
-  while (estado.notaActual + aporte() < objetivo - 1e-9) {
-    let subioAlguna = false;
+  let vueltas = 0;
+  while (
+    estado.notaActual + aporteFijado + aporteLibre() < objetivo - 1e-9
+  ) {
+    let subio = false;
     for (const e of orden) {
       if (e.puntaje >= e.p.puntajeMax) continue;
       e.puntaje += 1;
-      subioAlguna = true;
-      if (estado.notaActual + aporte() >= objetivo - 1e-9) break;
+      subio = true;
+      if (estado.notaActual + aporteFijado + aporteLibre() >= objetivo - 1e-9)
+        break;
     }
-    if (!subioAlguna) break; // todas al máximo
-    if (++vuelta > 200) break; // guarda contra bucle infinito
+    if (!subio) break;
+    if (++vueltas > 200) break;
   }
 
-  const alcanzable = estado.notaActual + aporte() >= objetivo - 1e-9;
+  for (const e of enteros) valoresFijados.set(e.p, e.puntaje);
 
-  const metas: MetaEvaluacion[] = enteros.map((e) => ({
-    seccionIndice: e.p.seccionIndice,
-    seccionNombre: e.p.seccionNombre,
-    orden: e.p.orden,
-    etiqueta: e.p.etiqueta,
-    peso: e.p.peso,
-    meta: e.p.puntajeMax > 0 ? (e.puntaje / e.p.puntajeMax) * 100 : 0,
-    metaEnPuntaje: e.puntaje,
-    puntajeMax: e.p.puntajeMax,
-    referencia: Math.round(e.p.referencia * 10) / 10,
-    exigencia: clasificar(
-      e.p.puntajeMax > 0 ? (e.puntaje / e.p.puntajeMax) * 100 : 0,
-      e.p.referencia
-    ),
-  }));
+  const total = estado.notaActual + aporteFijado + aporteLibre();
+  const alcanzable = total >= objetivo - 1e-9;
 
   return {
     objetivo,
     alcanzable,
     yaAlcanzado: false,
+    techoAlcanzable,
     promedioNecesario,
-    metas,
-    mensaje: alcanzable
-      ? `Repartido según tu desempeño en cada sección.`
-      : `Aunque saques 100 en todo lo que falta, el máximo alcanzable es ${estado.notaMaxima.toFixed(1)}.`,
+    metas: construirMetas(valoresFijados),
+    mensaje:
+      fijadasList.length > 0
+        ? "Plan reajustado con las notas que fijaste."
+        : "Repartido según tu desempeño en cada sección.",
   };
 }
