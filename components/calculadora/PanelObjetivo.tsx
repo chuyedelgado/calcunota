@@ -8,6 +8,8 @@ import {
   type Exigencia,
   type SeccionEvaluacion,
 } from "@/lib/calculos";
+import Ayuda from "./Ayuda";
+import { EXPLICACIONES } from "./explicaciones";
 
 // Cada estado semántico lleva ícono + texto además del color (nunca color solo).
 const EXIGENCIA_UI: Record<Exigencia, { texto: string; clase: string }> = {
@@ -106,6 +108,16 @@ export default function PanelObjetivo({
           <p className="text-14-normal !text-black-300">
             El reparto no es parejo a propósito: te pide más donde ya vienes rindiendo mejor.
           </p>
+          {/* Leyenda de las dos cifras que trae cada fila. Abre hacia arriba para
+              no tapar las metas de la lista que explica. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] !text-black-300">
+            <span className="inline-flex items-center gap-1">
+              Meta sugerida <Ayuda explicacion={EXPLICACIONES.metaSugerida} />
+            </span>
+            <span className="inline-flex items-center gap-1">
+              Exigencia <Ayuda explicacion={EXPLICACIONES.exigencia} />
+            </span>
+          </div>
           <ul className="space-y-2">
             {plan.metas.map((m) => {
               const ui = EXIGENCIA_UI[m.exigencia];

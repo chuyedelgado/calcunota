@@ -14,6 +14,8 @@ import {
 } from "@/lib/calculos";
 import PanelObjetivo from "./PanelObjetivo";
 import EditorSecciones from "./EditorSecciones";
+import Ayuda from "./Ayuda";
+import { EXPLICACIONES, type Explicacion } from "./explicaciones";
 import {
   aEval,
   borradorAEval,
@@ -193,18 +195,21 @@ export default function Calculadora({
       {/* Panel de resultados — "Nota actual" es la protagonista */}
       <div className="space-y-3">
         <div className="tarjeta-hero p-5">
-          <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">Nota actual</p>
+          <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300 inline-flex items-center gap-1.5">
+            Nota actual <Ayuda explicacion={EXPLICACIONES.notaActual} />
+          </p>
           <p className="text-[52px] leading-none font-extrabold tabular-nums mt-1 text-tinta">
             {fmt(estado.notaActual)}
             <span className="text-20-medium !text-black-300"> / 100</span>
           </p>
         </div>
         <div className="grid grid-cols-3 gap-3">
-          <TarjetaMini etiqueta="En juego" valor={fmt(estado.porcentajeRestante)} sufijo="pts" />
-          <TarjetaMini etiqueta="Máxima" valor={fmt(estado.notaMaxima)} />
+          <TarjetaMini etiqueta="En juego" valor={fmt(estado.porcentajeRestante)} sufijo="pts" ayuda={EXPLICACIONES.enJuego} />
+          <TarjetaMini etiqueta="Máxima" valor={fmt(estado.notaMaxima)} ayuda={EXPLICACIONES.notaMaxima} />
           <TarjetaMini
             etiqueta="Promedio"
             valor={estado.promedioParcial === null ? "—" : fmt(estado.promedioParcial)}
+            ayuda={EXPLICACIONES.promedioActual}
           />
         </div>
       </div>
@@ -368,10 +373,23 @@ export default function Calculadora({
   );
 }
 
-function TarjetaMini({ etiqueta, valor, sufijo }: { etiqueta: string; valor: string; sufijo?: string }) {
+function TarjetaMini({
+  etiqueta,
+  valor,
+  sufijo,
+  ayuda,
+}: {
+  etiqueta: string;
+  valor: string;
+  sufijo?: string;
+  ayuda?: Explicacion;
+}) {
   return (
-    <div className="tarjeta p-3">
-      <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300">{etiqueta}</p>
+    <div className="tarjeta p-3 relative">
+      <p className="text-[11px] uppercase tracking-wide font-bold !text-black-300 inline-flex items-center gap-1">
+        {etiqueta}
+        {ayuda && <Ayuda explicacion={ayuda} />}
+      </p>
       <p className="text-[24px] font-bold leading-tight tabular-nums mt-0.5">
         {valor}
         {sufijo ? <span className="text-14-normal !text-black-300"> {sufijo}</span> : null}
