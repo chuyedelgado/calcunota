@@ -108,7 +108,7 @@ export default function Ayuda({
             arriba ? "bottom-full mb-2" : "top-full mt-2"
           }`}
         >
-          <span className="block text-14-normal font-bold text-tinta mb-1">{titulo}</span>
+          <span className="block text-14-normal font-bold !text-tinta mb-1">{titulo}</span>
           <span className="block text-14-normal !text-black-300 leading-snug">{texto}</span>
         </span>
       )}
