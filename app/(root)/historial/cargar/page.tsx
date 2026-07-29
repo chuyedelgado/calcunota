@@ -85,10 +85,13 @@ export default async function CargarHistorialPage() {
 
   return (
     <section className="section_container max-w-2xl">
-      <Link href="/semestre" className="text-16-medium text-blue-800 underline">
-        ← Mi semestre
+      <Link
+        href="/semestre"
+        className="inline-flex items-center gap-1.5 min-h-[44px] px-3.5 rounded-xl bg-primary-100 text-14-normal font-semibold !text-primary-ink hover:bg-primary/15 transition-colors"
+      >
+        <span aria-hidden="true">←</span> Volver a mi semestre
       </Link>
-      <h1 className="text-30-bold mt-3 mb-1">Cargar mi historial</h1>
+      <h1 className="text-30-bold mt-4 mb-1 text-tinta">Cargar mi historial</h1>
       <p className="text-16-medium text-black-300 mb-8">
         Marca lo que ya cursaste y su nota. Ajusta el periodo una vez por semestre; se guarda a
         medida que avanzas.

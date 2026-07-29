@@ -53,11 +53,14 @@ export default async function RepeticionesPage() {
   if (cerrados.length === 0) {
     return (
       <section className="section_container max-w-2xl">
-        <Link href="/carrera" className="text-16-medium text-blue-800 underline">
-          ← Mi carrera
+        <Link
+          href="/carrera"
+          className="inline-flex items-center gap-1.5 min-h-[44px] px-3.5 rounded-xl bg-primary-100 text-14-normal font-semibold !text-primary-ink hover:bg-primary/15 transition-colors"
+        >
+          <span aria-hidden="true">←</span> Volver a mi carrera
         </Link>
-        <h1 className="text-30-bold mt-3 mb-4">Repeticiones</h1>
-        <div className="border-2 border-black rounded-2xl p-6 bg-white">
+        <h1 className="text-30-bold mt-4 mb-4 text-tinta">Repeticiones</h1>
+        <div className="tarjeta p-6">
           <p className="text-16-medium">
             Carga tu historial primero. Con tus cursos cerrados aquí verás qué debes repetir para
             graduarte y qué te conviene repetir para subir el índice.
@@ -130,10 +133,13 @@ export default async function RepeticionesPage() {
 
   return (
     <section className="section_container max-w-2xl">
-      <Link href="/carrera" className="text-16-medium text-blue-800 underline">
-        ← Mi carrera
+      <Link
+        href="/carrera"
+        className="inline-flex items-center gap-1.5 min-h-[44px] px-3.5 rounded-xl bg-primary-100 text-14-normal font-semibold !text-primary-ink hover:bg-primary/15 transition-colors"
+      >
+        <span aria-hidden="true">←</span> Volver a mi carrera
       </Link>
-      <h1 className="text-30-bold mt-3 mb-1">Repeticiones</h1>
+      <h1 className="text-30-bold mt-4 mb-1 text-tinta">Repeticiones</h1>
       <p className="text-16-medium text-black-300 mb-6">
         El efecto en tu índice. Repetir cuesta tiempo y dinero; tú decides lo opcional.
       </p>

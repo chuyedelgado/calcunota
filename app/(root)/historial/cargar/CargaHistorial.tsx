@@ -38,18 +38,18 @@ type Periodo = { anio: number; tipo: TipoPeriodo };
 type EstadoFila = { marcada: boolean; letra: Letra | null; profesor: string; override: Periodo | null };
 
 const campo =
-  "w-full border-2 border-black rounded-lg px-3 py-2 bg-white text-black " +
-  "focus:outline-none focus:ring-2 focus:ring-blue-800";
+  "w-full border border-borde rounded-lg px-3 py-2 bg-superficie text-tinta " +
+  "focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60";
 
 const FILA_VACIA: EstadoFila = { marcada: false, letra: null, profesor: "", override: null };
 
-// A y B verde, C neutro, D ámbar, F rojo.
-const COLOR_LETRA: Record<Letra, string> = {
-  A: "bg-green-600 border-green-700 !text-white",
-  B: "bg-green-500 border-green-700 !text-white",
-  C: "bg-gray-300 border-black-300 !text-black",
-  D: "bg-amber-400 border-amber-600 !text-black",
-  F: "bg-red-500 border-red-700 !text-white",
+// Los colores del badge de letra viven en globals.css (.badge-letra--x).
+const CLASE_LETRA: Record<Letra, string> = {
+  A: "badge-letra--a",
+  B: "badge-letra--b",
+  C: "badge-letra--c",
+  D: "badge-letra--d",
+  F: "badge-letra--f",
 };
 
 function SelectorLetra({ valor, onChange }: { valor: Letra | null; onChange: (l: Letra) => void }) {
@@ -61,9 +61,7 @@ function SelectorLetra({ valor, onChange }: { valor: Letra | null; onChange: (l:
           type="button"
           aria-pressed={valor === l}
           onClick={() => onChange(l)}
-          className={`w-11 h-11 rounded-lg border-2 text-20-medium font-bold ${
-            valor === l ? COLOR_LETRA[l] : "bg-white border-black !text-black"
-          }`}
+          className={`badge-letra w-11 h-11 text-20-medium ${valor === l ? CLASE_LETRA[l] : "badge-letra--off"}`}
         >
           {l}
         </button>
@@ -192,7 +190,7 @@ export default function CargaHistorial({
         const per = periodosGrupo[g.key];
         const pendientes = g.materias.filter((m) => !yaCargadas.has(m.materiaId));
         return (
-          <div key={g.key} className="border-2 border-black rounded-2xl p-4 bg-white">
+          <div key={g.key} className="tarjeta p-4">
             <h2 className="text-20-medium font-semibold mb-1">{g.etiqueta}</h2>
             <p className="text-14-normal !text-black-300 mb-2">¿En qué periodo cursaste este semestre?</p>
             <div className="mb-4 max-w-[220px]">
@@ -215,18 +213,18 @@ export default function CargaHistorial({
                       <span className="text-16-medium">
                         {m.codigo} · {m.nombre}
                       </span>
-                      <span className="text-14-normal !text-green-700 font-semibold shrink-0">
+                      <span className="text-14-normal !text-verde-fuerte font-semibold shrink-0">
                         ✓ {c?.letra ?? "cargada"}
                       </span>
                     </div>
                   );
                 }
                 return (
-                  <div key={m.materiaPlanId} className="border-t border-gray-200 pt-3">
+                  <div key={m.materiaPlanId} className="border-t border-hairline pt-3">
                     <label className="flex items-start gap-2">
                       <input
                         type="checkbox"
-                        className="mt-1"
+                        className="mt-1 accent-primary w-4 h-4"
                         checked={st.marcada}
                         onChange={(e) => setFila(m.materiaPlanId, { marcada: e.target.checked })}
                       />
@@ -267,7 +265,7 @@ export default function CargaHistorial({
                             />
                             <button
                               type="button"
-                              className="text-14-normal !text-blue-800 underline shrink-0"
+                              className="text-14-normal !text-primary-ink underline shrink-0"
                               onClick={() => setFila(m.materiaPlanId, { override: null })}
                             >
                               usar el del grupo
@@ -276,7 +274,7 @@ export default function CargaHistorial({
                         ) : (
                           <button
                             type="button"
-                            className="text-14-normal !text-blue-800 underline"
+                            className="text-14-normal !text-primary-ink underline"
                             onClick={() => setFila(m.materiaPlanId, { override: per })}
                           >
                             La cursé en otro periodo
@@ -289,7 +287,7 @@ export default function CargaHistorial({
               })}
             </div>
 
-            {errorGrupo[g.key] && <p className="text-14-normal !text-red-600 mt-3">{errorGrupo[g.key]}</p>}
+            {errorGrupo[g.key] && <p className="text-14-normal !text-rojo-fuerte mt-3">{errorGrupo[g.key]}</p>}
 
             {pendientes.length > 0 && (
               <Button
@@ -364,7 +362,7 @@ function Resumen({ cursos, totalCreditos }: { cursos: CursoGuardado[]; totalCred
 
   if (cursos.length === 0) {
     return (
-      <div className="border-2 border-black rounded-2xl p-5 bg-white">
+      <div className="tarjeta p-5">
         <p className="text-16-medium text-black-300">
           Aún no has cargado materias. A medida que marques y guardes, tu índice aparece aquí.
         </p>
@@ -373,15 +371,15 @@ function Resumen({ cursos, totalCreditos }: { cursos: CursoGuardado[]; totalCred
   }
 
   return (
-    <div className="border-4 border-black bg-primary-100 rounded-2xl p-5 shadow-xl space-y-4">
+    <div className="bg-primary-100 border border-primary/20 rounded-2xl p-5 shadow-suave space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div className="border-2 border-black rounded-xl p-3 bg-white">
+        <div className="tarjeta p-3">
           <p className="text-14-normal !text-black-300">Índice acumulado</p>
-          <p className="text-30-bold leading-tight">{resultado.indice.toFixed(2)}</p>
+          <p className="text-30-bold leading-tight tabular-nums text-tinta">{resultado.indice.toFixed(2)}</p>
         </div>
-        <div className="border-2 border-black rounded-xl p-3 bg-white">
+        <div className="tarjeta p-3">
           <p className="text-14-normal !text-black-300">Créditos aprobados</p>
-          <p className="text-30-bold leading-tight">
+          <p className="text-30-bold leading-tight tabular-nums text-tinta">
             {aprobados}
             <span className="text-14-normal !text-black-300"> / {totalCreditos}</span>
           </p>
@@ -403,8 +401,8 @@ function Resumen({ cursos, totalCreditos }: { cursos: CursoGuardado[]; totalCred
       )}
 
       {fundamentalesD.length > 0 && (
-        <div className="border-2 border-black bg-secondary rounded-xl p-3">
-          <p className="text-14-normal !text-black font-semibold">
+        <div className="bg-ambar-suave border border-ambar-fuerte/30 rounded-xl p-3">
+          <p className="text-14-normal !text-ambar-fuerte font-semibold">
             Tienes {fundamentalesD.length} materia(s) fundamental(es) aprobada(s) con D: avanzas, pero
             no puedes graduarte con ellas hasta subirlas a C.
           </p>
@@ -505,7 +503,7 @@ function BusquedaLibre({
   }
 
   return (
-    <div className="border-2 border-black rounded-2xl p-4 bg-white">
+    <div className="tarjeta p-4">
       <h2 className="text-20-medium font-semibold mb-1">¿Falta una materia del pénsum?</h2>
       <p className="text-14-normal !text-black-300 mb-3">
         Electivas de catálogo, plan viejo o convalidaciones. Búscala en la UTP.
@@ -517,7 +515,7 @@ function BusquedaLibre({
         onChange={(e) => onQuery(e.target.value)}
       />
       {resultados.length > 0 && (
-        <ul className="mt-2 border-2 border-black rounded-lg divide-y divide-gray-200 max-h-60 overflow-y-auto">
+        <ul className="mt-2 border border-borde rounded-lg divide-y divide-hairline bg-superficie max-h-60 overflow-y-auto">
           {resultados.map((m) => (
             <li key={m.id}>
               <button
@@ -537,7 +535,7 @@ function BusquedaLibre({
       {filas.map((f, i) => {
         const calificable = esCalificable(Number(f.creditosStr));
         return (
-          <div key={f.materia.id} className="border-t border-gray-200 mt-3 pt-3 space-y-2">
+          <div key={f.materia.id} className="border-t border-hairline mt-3 pt-3 space-y-2">
             <p className="text-16-medium font-semibold">
               {f.materia.codigo} · {f.materia.nombre}
             </p>

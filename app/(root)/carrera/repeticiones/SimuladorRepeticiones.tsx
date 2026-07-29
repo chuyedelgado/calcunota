@@ -20,12 +20,14 @@ export type Repetible = {
   metaF: Letra | null;
 };
 
-const COLOR_LETRA: Record<Letra, string> = {
-  A: "bg-green-600 border-green-700 !text-white",
-  B: "bg-green-500 border-green-700 !text-white",
-  C: "bg-gray-300 border-black-300 !text-black",
-  D: "bg-amber-400 border-amber-600 !text-black",
-  F: "bg-red-500 border-red-700 !text-white",
+// Los colores del badge de letra viven en globals.css (.badge-letra--x); aquí
+// solo se mapea la letra a su modificador.
+const CLASE_LETRA: Record<Letra, string> = {
+  A: "badge-letra--a",
+  B: "badge-letra--b",
+  C: "badge-letra--c",
+  D: "badge-letra--d",
+  F: "badge-letra--f",
 };
 
 function BotonesLetra({ valor, onChange }: { valor: Letra; onChange: (l: Letra) => void }) {
@@ -37,9 +39,7 @@ function BotonesLetra({ valor, onChange }: { valor: Letra; onChange: (l: Letra) 
           type="button"
           aria-pressed={valor === l}
           onClick={() => onChange(l)}
-          className={`w-9 h-9 rounded-lg border-2 text-16-medium font-bold ${
-            valor === l ? COLOR_LETRA[l] : "bg-white border-black !text-black"
-          }`}
+          className={`badge-letra w-9 h-9 text-16-medium ${valor === l ? CLASE_LETRA[l] : "badge-letra--off"}`}
         >
           {l}
         </button>
@@ -93,17 +93,24 @@ export default function SimuladorRepeticiones({
 
   return (
     <div className="space-y-8">
-      {/* Ancla: índice actual y simulado */}
-      <div className="border-4 border-black bg-blue-800 rounded-2xl p-5 shadow-xl text-white">
+      {/* Ancla: índice actual y simulado. Los números son datos → casi-negro
+          sobre superficie; el delta lleva color semántico. */}
+      <div className="tarjeta-hero p-5">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-14-normal !text-white/80">Índice actual</p>
-            <p className="text-[44px] leading-none font-extrabold">{indiceActual.toFixed(2)}</p>
+            <p className="text-14-normal !text-black-300">Índice actual</p>
+            <p className="text-[44px] leading-none font-extrabold tabular-nums text-tinta">{indiceActual.toFixed(2)}</p>
           </div>
           <div className="text-right">
-            <p className="text-14-normal !text-white/80">Con lo seleccionado</p>
-            <p className="text-[44px] leading-none font-extrabold">{resultado.toFixed(2)}</p>
-            <p className="text-16-medium !text-white">{signo(delta)}</p>
+            <p className="text-14-normal !text-black-300">Con lo seleccionado</p>
+            <p className="text-[44px] leading-none font-extrabold tabular-nums text-tinta">{resultado.toFixed(2)}</p>
+            <p
+              className={`text-16-medium font-bold tabular-nums ${
+                delta > 0 ? "!text-verde-fuerte" : delta < 0 ? "!text-rojo-fuerte" : "!text-black-300"
+              }`}
+            >
+              {signo(delta)}
+            </p>
           </div>
         </div>
       </div>
@@ -139,7 +146,7 @@ export default function SimuladorRepeticiones({
         </div>
       )}
 
-      <div className="border-2 border-black rounded-2xl p-4 bg-white">
+      <div className="tarjeta p-4">
         <p className="text-16-medium mb-3">
           Para repetir de verdad, agrega la materia a tu semestre en curso y captúrala como siempre.
         </p>
@@ -168,7 +175,7 @@ function FilaRepetible({
         : "D aprobada: no bloquea nada, solo pesa en tu índice.";
 
   return (
-    <div className="border-2 border-black rounded-2xl p-4 bg-white">
+    <div className="tarjeta p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-16-medium font-semibold">
@@ -179,12 +186,17 @@ function FilaRepetible({
           </p>
         </div>
         <label className="flex items-center gap-1 text-14-normal !text-black-300 shrink-0">
-          <input type="checkbox" checked={estado.on} onChange={(e) => onChange({ on: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={estado.on}
+            onChange={(e) => onChange({ on: e.target.checked })}
+            className="accent-primary w-4 h-4"
+          />
           incluir
         </label>
       </div>
 
-      <p className="text-14-normal !text-black mt-2">{razon}</p>
+      <p className="text-14-normal !text-tinta mt-2">{razon}</p>
 
       {/* Efecto en el índice como rango */}
       <p className="text-14-normal !text-black-300 mt-2">
