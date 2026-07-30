@@ -35,10 +35,12 @@ const APLICAR = process.argv.includes("--aplicar");
  * Las versiones sin año reconocible quedan al final (valor 0).
  */
 function pesoVersion(version: string): number {
-  const m = version.match(/(\d{4})(?:-(\d))?/);
+  const m = version.match(/^(M-)?(\d{4})(?:-(\d))?$/i);
   if (!m) return 0;
-  const anio = parseInt(m[1], 10);
-  const sufijo = m[2] ? parseInt(m[2], 10) : 0;
+  const anio = parseInt(m[2], 10);
+  // Un plan "M-YYYY" rige desde el I semestre; el "YYYY" desde el verano
+  // anterior. Así que M-YYYY es POSTERIOR a YYYY, pero anterior a YYYY-2.
+  const sufijo = m[3] ? parseInt(m[3], 10) : m[1] ? 1 : 0;
   return anio * 10 + sufijo;
 }
 

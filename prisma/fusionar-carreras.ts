@@ -54,7 +54,14 @@ function claveCarrera(nombre: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
-    .replace(/\bLICENCIATURA\b|\bLIC\b|\bINGENIERIA\b|\bING\b|\bTECNICO\b/g, " ")
+    .replace(
+      /\bLICENCIATURA\b|\bLIC\b|\bINGENIERIA\b|\bING\b|\bTECNICO\b|\bTEC\b/g,
+      " "
+    )
+    // El "EN" queda huérfano al quitar "Licenciatura en Ingeniería" y hace que
+    // "Licenciatura en Ingenieria Civil" (planes de facultad) no agrupe con
+    // "INGENIERIA CIVIL" (portal de matrícula). Se quita también.
+    .replace(/\bEN\b|\bDEL\b|\bLA\b/g, " ")
     .replace(/[^A-Z ]/g, " ")
     .split(/\s+/)
     .filter(Boolean)

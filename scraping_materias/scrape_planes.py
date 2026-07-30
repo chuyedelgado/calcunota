@@ -35,7 +35,9 @@ LINEA_MATERIA = re.compile(
     r"(.+?)\s+"                  # 5: nombre (perezoso)
     r"(\d+)\s+"                  # 6: horas de clase (puede ser el total del
                                  #    curso: el técnico de aeronaves llega a 400)
-    r"(\d+)(\$\$)?\s+"           # 7/8: horas de laboratorio (+ pago)
+    r"(\d+)\s*(\$\$)?\s+"        # 7/8: horas de laboratorio (+ pago).
+                                 #    El portal de matrícula separa el $$
+                                 #    con espacio; las facultades lo pegan.
     r"(\d{1,2})"                 # 9: créditos — acotado a 2 dígitos a propósito.
                                  #    El máximo real en la UTP es 8. Sin este
                                  #    límite, un código de asignatura de 4 dígitos
@@ -95,6 +97,38 @@ TOTAL_CREDITOS = re.compile(
 )
 
 FACULTAD = re.compile(r"FACULTAD:\s*(.+?)\s*$", re.UNICODE)
+
+# Encabezado del portal de matrícula (matricula.utp.ac.pa), que no usa etiquetas:
+#   línea 1: UNIVERSIDAD TECNOLÓGICA DE PANAMÁ
+#   línea 2: LIC EN INGENIERÍA DE SOFTWARE          <- carrera abreviada
+#   línea 3: LICENCIATURA EN INGENIERÍA DE SOFTWARE M-2024   <- nombre completo
+# La línea 3 es la autoritativa: trae el nombre y la versión del plan.
+# El portal de matrícula pone el nombre en tres líneas:
+#   1: UNIVERSIDAD TECNOLÓGICA DE PANAMÁ
+#   2: LIC EN INGENIERÍA DE SOFTWARE          <- abreviada, SIN versión
+#   3: LICENCIATURA EN INGENIERÍA DE SOFTWARE M-2024   <- completa, CON versión
+#
+# Se usa la LÍNEA 2, no la 3, aunque la 3 parezca mejor. Razón: la 3 viene
+# truncada en varios PDFs ("...DE SOFTW M-2025", "INGENIERÍA ELECTRÓN 2023"),
+# así que planes de la MISMA carrera producirían nombres distintos y el seed
+# crearía carreras duplicadas. La línea 2 es idéntica entre versiones.
+#
+# La versión del plan no se toma de aquí: sale del nombre del archivo.
+UNIVERSIDAD_MATRICULA = re.compile(
+    r"^\s*UNIVERSIDAD\s+TECNOL[OÓ]GICA\s+DE\s+PANAM[AÁ]\s*$", re.UNICODE
+)
+
+# Catálogo de electivas del portal de matrícula. Va tras "Areas de Planes" y
+# solo trae código y nombre, SIN créditos:
+#   1148 SÍNTESIS DE FILTROS ANALÓGICOS
+# El patrón exige 4 dígitos al inicio, así que no colisiona con las filas de
+# materia, que empiezan con el número de orden (1 a 70).
+INICIO_ELECTIVAS_MATRICULA = re.compile(
+    r"^\s*(AREAS?\s+DE\s+PLANES|CODASIG\s+ASIGNATURA)\s*$", re.UNICODE
+)
+ELECTIVA_MATRICULA = re.compile(
+    r"^\s*(\d{4})\s+([A-ZÁÉÍÓÚÜÑ].{3,})$", re.UNICODE
+)
 CARRERA = re.compile(r"CARRERA:\s*(.+?)\s*$", re.UNICODE)
 
 CODIGO_REQUISITO = re.compile(r"\b(\d{4})\b")
@@ -189,6 +223,8 @@ def parsear_pdf(ruta: Path) -> dict:
     materias = []
     total_declarado = None
     electivas = []
+    en_catalogo_matricula = False
+    siguiente_es_carrera = False
     area_actual = None
     anio_actual = None
     periodo_actual = None
@@ -211,6 +247,15 @@ def parsear_pdf(ruta: Path) -> dict:
                     m = CARRERA.search(linea)
                     if m:
                         carrera = limpiar(m.group(1))
+                        continue
+                    # Portal de matrícula: la carrera es la línea que sigue a
+                    # "UNIVERSIDAD TECNOLÓGICA DE PANAMÁ"
+                    if siguiente_es_carrera:
+                        carrera = limpiar(linea)
+                        siguiente_es_carrera = False
+                        continue
+                    if UNIVERSIDAD_MATRICULA.match(sin_tildes(linea).upper()):
+                        siguiente_es_carrera = True
                         continue
 
                 if total_declarado is None:
@@ -290,6 +335,27 @@ def parsear_pdf(ruta: Path) -> dict:
                     })
                     continue
 
+                if INICIO_ELECTIVAS_MATRICULA.match(normalizada):
+                    en_catalogo_matricula = True
+                    continue
+
+                if en_catalogo_matricula:
+                    m = ELECTIVA_MATRICULA.match(linea)
+                    if m:
+                        electivas.append({
+                            "codigo": m.group(1),
+                            "tipo": "EE",
+                            "nombre": limpiar(m.group(2)),
+                            # El portal de matrícula no publica los créditos de
+                            # las electivas. Se marcan para resolverlos por
+                            # referencia cruzada contra otros planes.
+                            "creditos": 0,
+                            "creditosDesconocidos": True,
+                            "area": area_actual,
+                            "requisitos": {"codigos": [], "texto": None},
+                        })
+                        continue
+
                 m = AREA_ELECTIVA.match(normalizada)
                 if m:
                     area_actual = limpiar(m.group(1)).title()
@@ -321,6 +387,9 @@ def parsear_pdf(ruta: Path) -> dict:
         "materias": materias,
         "electivas": electivas,
         "totalCreditos": sum(m["creditos"] for m in materias),
+        "electivasSinCreditos": sum(
+            1 for e in electivas if e.get("creditosDesconocidos")
+        ),
         "totalCreditosDeclarado": total_declarado,
         "diferenciaCreditos": (
             None if total_declarado is None
