@@ -640,8 +640,11 @@ function faltanDatos(ctx: ContextoEstudiante): Recomendacion[] {
       titulo: "Carga tu historial para ver tu índice real",
       detalle:
         `Sin tus semestres anteriores, el índice se calcula solo con lo que ` +
-        `estás cursando ahora y no refleja tu expediente.`,
-      accion: { texto: "Cargar historial", ruta: "/historial/cargar" },
+        `estás cursando ahora y no refleja tu expediente. Si tienes el PDF de tu ` +
+        `Historial de Notas, se carga en segundos.`,
+      // Apunta a la importación por PDF, no a la captura manual: es el camino
+      // rápido y el que hace que la app sea útil desde el primer uso.
+      accion: { texto: "Importar historial", ruta: "/historial/importar" },
       peso: 75,
     });
   }

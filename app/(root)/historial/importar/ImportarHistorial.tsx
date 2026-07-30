@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,12 +12,13 @@ import {
 } from "@/lib/calculos";
 import { calcularIndiceDesdeCursos, type CursoParaIndice } from "@/lib/indice";
 import { codigoCuenta, type Emparejamiento, type MateriaRef } from "@/lib/emparejarHistorial";
-import { textoOpcionPlan, type PlanOpcion } from "@/lib/planes";
+import { etiquetaVersionPlan, textoOpcionPlan, type PlanOpcion } from "@/lib/planes";
 import type { CodigoNota } from "@/lib/importarHistorial";
 import {
   buscarMateriaParaImportar,
   guardarHistorialImportado,
   procesarHistorialPdf,
+  reemparejarConPlan,
   type ItemImportado,
 } from "./actions";
 
@@ -52,6 +54,8 @@ export default function ImportarHistorial({
   const router = useRouter();
   const [fase, setFase] = useState<"subir" | "revisar" | "listo">("subir");
   const [planId, setPlanId] = useState(planIdInicial);
+  // Plan elegido en el aviso de "plan equivocado" antes de reemparejar.
+  const [planSeleccionado, setPlanSeleccionado] = useState(planIdInicial);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avisos, setAvisos] = useState<string[]>([]);
@@ -63,6 +67,7 @@ export default function ImportarHistorial({
   const [guardados, setGuardados] = useState(0);
   const [procesando, iniciarProceso] = useTransition();
   const [guardando, iniciarGuardado] = useTransition();
+  const [reemparejando, iniciarReemparejado] = useTransition();
 
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -100,7 +105,37 @@ export default function ImportarHistorial({
           confirmada: e.origen === "plan" || e.origen === "catalogo",
         })),
       );
+      setPlanSeleccionado(planId);
       setFase("revisar");
+    });
+  }
+
+  // Reemparejar contra otro plan sin volver a subir el PDF: se reconstruyen las
+  // filas crudas desde lo ya parseado y se resuelven de nuevo contra el plan
+  // elegido. Reinicia las ediciones (confirmaciones/omisiones): cambiar de plan
+  // es empezar la revisión de cero.
+  function reemparejar(nuevoPlanId: string) {
+    setError(null);
+    const crudas = filas.map((f) => ({
+      periodo: f.periodo,
+      nombreMateria: f.nombreHistorial,
+      codigoNota: f.codigoNota,
+      notaExamenSemestral: f.notaExamenSemestral,
+    }));
+    iniciarReemparejado(async () => {
+      const res = await reemparejarConPlan(crudas, nuevoPlanId);
+      if (!res.ok) {
+        setError(res.error ?? "No se pudo reemparejar.");
+        return;
+      }
+      setPlanId(nuevoPlanId);
+      setFilas(
+        res.emparejamientos.map((e) => ({
+          ...e,
+          omitida: false,
+          confirmada: e.origen === "plan" || e.origen === "catalogo",
+        })),
+      );
     });
   }
 
@@ -185,6 +220,15 @@ export default function ImportarHistorial({
     return { ok, porConfirmar, sinResolver, omitidas };
   }, [filas]);
 
+  // Señal de plan equivocado: muchas materias fuera del plan o sin resolver. Con
+  // el plan correcto esto es bajo (alguna convalidación suelta); alto significa
+  // que probablemente eligió otra versión del plan. No cuenta las omitidas.
+  const fueraCount = filas.filter((f) => !f.omitida && f.materiaId && f.fueraDelPlan).length;
+  const totalNoOmitidas = filas.filter((f) => !f.omitida).length;
+  const dudosas = fueraCount + resumen.sinResolver;
+  const avisoPlanEquivocado = totalNoOmitidas >= 5 && dudosas / totalNoOmitidas >= 0.4;
+  const planActual = planes.find((p) => p.id === planId);
+
   // Autoverificación contra el índice oficial del portal.
   const oficialNum = Number(oficial.replace(",", "."));
   const oficialValido = oficial.trim() !== "" && Number.isFinite(oficialNum);
@@ -266,6 +310,14 @@ export default function ImportarHistorial({
           )}
         </div>
 
+        {/* Cómo conseguir el PDF: sin esto la función no se usa. */}
+        <div className="tarjeta bg-crema p-4">
+          <p className="text-14-normal font-semibold text-tinta mb-1">¿Dónde consigo el PDF?</p>
+          <p className="text-14-normal !text-black-300">
+            En el portal de matrícula: <strong>Historial de Notas → Imprimir → Guardar como PDF</strong>.
+          </p>
+        </div>
+
         {/* Archivo */}
         <div>
           <label className="block text-16-medium font-semibold mb-2">Tu Historial de Notas (PDF)</label>
@@ -295,6 +347,17 @@ export default function ImportarHistorial({
         <Button onClick={procesar} disabled={procesando || !archivo} className="calcular_btn w-full">
           {procesando ? "Procesando…" : "Procesar historial"}
         </Button>
+
+        <p className="text-14-normal !text-black-300 text-center">
+          ¿No tienes el PDF a mano?{" "}
+          <Link
+            href="/historial/cargar"
+            className="font-semibold !text-primary-ink underline underline-offset-2"
+          >
+            Márcalo a mano
+          </Link>
+          .
+        </p>
       </div>
     );
   }
@@ -318,6 +381,49 @@ export default function ImportarHistorial({
           </p>
         )}
       </div>
+
+      {/* Salvaguarda de plan equivocado: si muchas materias no cuadran con el
+          plan elegido, ofrecer cambiarlo y reemparejar sin volver a subir el PDF. */}
+      {avisoPlanEquivocado && (
+        <div className="tarjeta bg-ambar-suave border border-ambar-fuerte/40 p-4 space-y-3">
+          <p className="text-16-medium font-semibold !text-ambar-fuerte">¿Elegiste el plan correcto?</p>
+          <p className="text-14-normal text-tinta">
+            {dudosas} de {totalNoOmitidas} materias no coinciden con{" "}
+            <strong>{planActual ? etiquetaVersionPlan(planActual.version) : "tu plan"}</strong> (
+            {fueraCount} fuera del plan, {resumen.sinResolver} sin resolver). Si entraste con otra
+            versión, cámbiala aquí y volvemos a emparejar sin subir el PDF de nuevo.
+          </p>
+          {planes.length > 1 ? (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <select
+                aria-label="Plan de estudio"
+                className={`${campo} sm:flex-1`}
+                value={planSeleccionado}
+                onChange={(e) => setPlanSeleccionado(e.target.value)}
+              >
+                {planes.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {textoOpcionPlan(p, planes)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => reemparejar(planSeleccionado)}
+                disabled={reemparejando || planSeleccionado === planId}
+                className="btn-secundario min-h-[44px] px-5 rounded-xl shrink-0 disabled:opacity-50"
+              >
+                {reemparejando ? "Reemparejando…" : "Reemparejar"}
+              </button>
+            </div>
+          ) : (
+            <p className="text-14-normal !text-black-300">
+              Es el único plan de tu carrera. Revisa las materias sin resolver más abajo o usa la
+              búsqueda para asignarlas a mano.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Periodos y materias */}
       {periodos.map((p) => {

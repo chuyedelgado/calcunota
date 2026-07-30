@@ -92,7 +92,30 @@ export default async function CargarHistorialPage() {
         <span aria-hidden="true">←</span> Volver a mi semestre
       </Link>
       <h1 className="text-30-bold mt-4 mb-1 text-tinta">Cargar mi historial</h1>
-      <p className="text-16-medium text-black-300 mb-8">
+      <p className="text-16-medium text-black-300 mb-6">
+        La forma más rápida es desde el PDF de tu Historial de Notas. Si no lo tienes a mano,
+        márcalo a mano aquí abajo.
+      </p>
+
+      {/* Camino principal: importar el PDF. Diez veces más rápido que marcar
+          materia por materia, así que va arriba y más visible. */}
+      <div className="tarjeta bg-primary-100 border-2 border-primary/30 p-5 mb-8">
+        <p className="text-16-medium font-semibold text-tinta mb-1">
+          ¿Tienes el PDF de tu Historial de Notas?
+        </p>
+        <p className="text-14-normal !text-black-300 mb-4">
+          Cárgalo y lo leemos en segundos: emparejamos cada materia con tu plan y solo revisas.
+        </p>
+        <Link
+          href="/historial/importar"
+          className="inline-flex items-center justify-center min-h-[44px] px-5 rounded-xl bg-primary !text-white text-16-medium font-semibold hover:bg-primary-ink transition-colors"
+        >
+          Importar desde el PDF
+        </Link>
+      </div>
+
+      <h2 className="text-20-medium font-semibold text-tinta mb-1">O márcalo a mano</h2>
+      <p className="text-14-normal !text-black-300 mb-6">
         Marca lo que ya cursaste y su nota. Ajusta el periodo una vez por semestre; se guarda a
         medida que avanzas.
       </p>

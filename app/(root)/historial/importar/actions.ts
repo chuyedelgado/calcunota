@@ -13,7 +13,7 @@ import {
   type TipoPeriodo,
 } from "@/lib/calculos";
 import { buscar } from "@/lib/texto";
-import { parsearHistorial, type CodigoNota } from "@/lib/importarHistorial";
+import { parsearHistorial, type CodigoNota, type FilaHistorial } from "@/lib/importarHistorial";
 import { extraerTextoHistorial } from "@/lib/importarHistorialPdf";
 import { emparejarHistorial, type Emparejamiento, type MateriaRef } from "@/lib/emparejarHistorial";
 
@@ -65,6 +65,43 @@ async function creditosFrecuentes(): Promise<Map<string, number>> {
   return new Map([...mejor].map(([k, v]) => [k, v.creditos]));
 }
 
+// Empareja las filas contra un plan concreto: arma refs del plan + catálogo y
+// llama al motor puro. Se comparte entre el primer procesado (con PDF) y el
+// reemparejado (cuando el estudiante cambia de plan sin volver a subir el PDF).
+async function emparejarContraPlan(
+  filas: FilaHistorial[],
+  planId: string,
+  universidadId: string,
+): Promise<Emparejamiento[]> {
+  const [planRefs, creditos] = await Promise.all([refsDelPlan(planId), creditosFrecuentes()]);
+  const enPlan = new Set(planRefs.map((r) => r.materiaId));
+  const catalogo: MateriaRef[] = (
+    await prisma.materia.findMany({
+      where: { universidadId },
+      select: { id: true, codigo: true, nombre: true },
+    })
+  )
+    .filter((m) => !enPlan.has(m.id) && !esMarcadorDeElectiva(m.codigo))
+    .map((m) => ({
+      materiaId: m.id,
+      codigo: m.codigo,
+      nombre: m.nombre,
+      creditos: creditos.get(m.id) ?? 3,
+      fundamental: false,
+      fuente: "catalogo" as const,
+    }));
+  return emparejarHistorial(filas, planRefs, catalogo);
+}
+
+// El plan debe existir y ser de la misma universidad del estudiante.
+async function planEsDeUniversidad(planId: string, universidadId: string): Promise<boolean> {
+  const plan = await prisma.planEstudio.findUnique({
+    where: { id: planId },
+    select: { carrera: { select: { facultad: { select: { universidadId: true } } } } },
+  });
+  return !!plan && plan.carrera.facultad.universidadId === universidadId;
+}
+
 export type RevisionHistorial = {
   ok: boolean;
   error?: string;
@@ -91,12 +128,7 @@ export async function procesarHistorialPdf(formData: FormData): Promise<Revision
   if (archivo.size === 0) return { ok: false, error: "El archivo está vacío.", ...vacio };
   if (archivo.size > LIMITE_BYTES) return { ok: false, error: "El PDF supera el límite de 5 MB.", ...vacio };
 
-  // El plan debe existir y ser de la misma universidad del estudiante.
-  const plan = await prisma.planEstudio.findUnique({
-    where: { id: planId },
-    select: { carrera: { select: { facultad: { select: { universidadId: true } } } } },
-  });
-  if (!plan || plan.carrera.facultad.universidadId !== perfil.universidadId) {
+  if (!(await planEsDeUniversidad(planId, perfil.universidadId))) {
     return { ok: false, error: "Plan no válido.", ...vacio };
   }
 
@@ -119,30 +151,40 @@ export async function procesarHistorialPdf(formData: FormData): Promise<Revision
     };
   }
 
-  const [planRefs, creditos] = await Promise.all([refsDelPlan(planId), creditosFrecuentes()]);
-  const enPlan = new Set(planRefs.map((r) => r.materiaId));
-  const catalogo: MateriaRef[] = (
-    await prisma.materia.findMany({
-      where: { universidadId: perfil.universidadId },
-      select: { id: true, codigo: true, nombre: true },
-    })
-  )
-    .filter((m) => !enPlan.has(m.id) && !esMarcadorDeElectiva(m.codigo))
-    .map((m) => ({
-      materiaId: m.id,
-      codigo: m.codigo,
-      nombre: m.nombre,
-      creditos: creditos.get(m.id) ?? 3,
-      fundamental: false,
-      fuente: "catalogo" as const,
-    }));
-
   return {
     ok: true,
     periodos: periodosDetectados,
     lineasSinReconocer,
-    emparejamientos: emparejarHistorial(filas, planRefs, catalogo),
+    emparejamientos: await emparejarContraPlan(filas, planId, perfil.universidadId),
   };
+}
+
+/**
+ * Reempareja las filas ya parseadas contra OTRO plan, sin volver a subir el PDF.
+ * Es la salvaguarda de "elegí el plan equivocado": el estudiante cambia de plan
+ * en la revisión y las materias se resuelven de nuevo contra el correcto.
+ */
+export async function reemparejarConPlan(
+  filas: FilaHistorial[],
+  planId: string,
+): Promise<{ ok: boolean; error?: string; emparejamientos: Emparejamiento[] }> {
+  const perfil = await perfilDeSesion();
+  if (!perfil) return { ok: false, error: "Sesión no válida.", emparejamientos: [] };
+  if (!(await planEsDeUniversidad(planId, perfil.universidadId))) {
+    return { ok: false, error: "Plan no válido.", emparejamientos: [] };
+  }
+  // Las filas vienen del cliente: se filtran las que tengan periodo y código
+  // válidos antes de reemparejar (el guardado revalida todo de nuevo).
+  const limpias = filas.filter(
+    (f) =>
+      CODIGOS_VALIDOS.has(f.codigoNota) &&
+      TIPOS_VALIDOS.has(f.periodo.tipo) &&
+      Number.isInteger(f.periodo.anio),
+  );
+  if (limpias.length === 0) {
+    return { ok: false, error: "No hay materias para reemparejar.", emparejamientos: [] };
+  }
+  return { ok: true, emparejamientos: await emparejarContraPlan(limpias, planId, perfil.universidadId) };
 }
 
 /** Búsqueda manual para reasignar una materia difusa o sin resolver. */

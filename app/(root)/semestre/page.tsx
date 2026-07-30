@@ -178,7 +178,7 @@ export default async function SemestrePage({
             </div>
           </div>
           <Link
-            href="/historial/cargar"
+            href="/historial/importar"
             className="shrink-0 text-14-normal font-semibold !text-primary-ink bg-primary-100 rounded-xl px-3 py-2 hover:bg-primary/15 transition-colors"
           >
             Cargar historial
@@ -199,11 +199,20 @@ export default async function SemestrePage({
       {historialVacio && (
         <div className="max-w-3xl mx-auto mb-8 bg-primary-100 border-2 border-primary/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-suave">
           <p className="text-16-medium">
-            Tu índice está incompleto hasta que cargues los semestres que ya cursaste.
+            Tu índice está incompleto hasta que cargues los semestres que ya cursaste. Con el PDF de
+            tu Historial de Notas es cuestión de segundos.
           </p>
-          <Button asChild className="calcular_btn !text-[16px] !p-3 shrink-0">
-            <Link href="/historial/cargar">Cargar historial</Link>
-          </Button>
+          <div className="flex flex-col items-stretch sm:items-end gap-1 shrink-0">
+            <Button asChild className="calcular_btn !text-[16px] !p-3">
+              <Link href="/historial/importar">Cargar historial</Link>
+            </Button>
+            <Link
+              href="/historial/cargar"
+              className="text-14-normal font-semibold !text-primary-ink underline underline-offset-2 text-center sm:text-right"
+            >
+              o márcalo a mano
+            </Link>
+          </div>
         </div>
       )}
 

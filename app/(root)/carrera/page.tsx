@@ -81,8 +81,14 @@ export default async function CarreraPage() {
             para tu objetivo. Es lo que ninguna otra herramienta te da.
           </p>
           <Button asChild className="calcular_btn w-full">
-            <Link href="/historial/cargar">Cargar mi historial</Link>
+            <Link href="/historial/importar">Cargar mi historial desde el PDF</Link>
           </Button>
+          <Link
+            href="/historial/cargar"
+            className="inline-block mt-3 text-14-normal font-semibold !text-primary-ink underline underline-offset-2"
+          >
+            o márcalo a mano
+          </Link>
         </div>
       </section>
     );
