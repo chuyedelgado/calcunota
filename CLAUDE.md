@@ -186,8 +186,21 @@ Pendiente de verdad:
    config en `auth.config.ts`.
 3. **Secretos a rotar.** Credenciales que estuvieron expuestas (`.env`,
    contraseña de MySQL del scraper legado) deben rotarse.
-4. **Vulnerabilidades de npm** que vienen de Sanity y `next-auth@beta`. **No
-   correr** `npm audit fix --force`: rompe el proyecto.
+4. **Vulnerabilidades de npm.** Sanity ya se eliminó (bajó de ~74 a ~21). Las
+   que quedan vienen de `next-auth@beta` (los 3 críticos) y del toolchain de
+   Prisma y de build (eslint/postcss/sharp/lodash, transitivos). **No correr**
+   `npm audit fix --force`: baja Prisma a 6.x y rompe el proyecto.
+5. **Migración a Next 16 y salida de la beta de `next-auth` — septiembre de
+   2026.** Van juntas. (a) Estamos en Next 15.5.21 (LTS de mantenimiento); el
+   soporte de 15.x termina el **21-oct-2026**, así que subir a Next 16 es tarea
+   de septiembre de 2026 (es migración real: `next lint` desaparece, hay codemods).
+   (b) `next-auth` sigue en `5.0.0-beta.25`; existe `beta.32` (siete versiones de
+   una línea beta, sin garantía de compatibilidad y seguiríamos en beta), así que
+   **no se sube todavía**: se hace después del lanzamiento de la beta cerrada,
+   junto con Next 16 y como **un solo cambio de auth a la vez**. El salto de Next
+   15.5 ya tocó la capa de auth (arreglo del bypass por segment-prefetch), por eso
+   no se encadena otro cambio de auth sin probar el login en navegador entre uno
+   y otro.
 
 ## Próximos pasos, en orden
 
