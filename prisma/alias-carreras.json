@@ -1,0 +1,16 @@
+{
+  "_descripcion": "Overrides de emparejamiento para integrar-planes-matricula.ts. El script empareja cada carrera del portal de matrícula con la carrera existente cuya claveCarrera coincide (misma lógica que fusionar-carreras.ts) y le adjunta directamente los planes de matrícula. Cuando esa coincidencia automática falla o hay que plegar variantes, consulta este archivo.",
+  "_formato": "CLAVE = clave normalizada de un nombre de carrera (la que imprime el script como 'clave \"...\"'), sea del portal o de una variante ya existente. VALOR = clave normalizada de la carrera CANÓNICA a la que pertenece, o el literal '@NUEVA' para crear una carrera nueva (solo cuando no existe equivalente). Dos usos: (a) el nombre abreviado del portal apunta a la carrera existente real; (b) una variante existente (p.ej. por tendencia) apunta a la carrera canónica para que sus planes se plieguen ahí y su fila vacía se borre. Las claves que empiezan con '_' son documentación y el script las ignora.",
+  "_notas": {
+    "SIST Y COMP": "(a) El portal abrevia 'LIC.ING.SIST.Y COMP.' -> clave 'SIST Y COMP'. La carrera real es 'Licenciatura en Ingeniería de Sistemas y Computación' (clave 'DE SISTEMAS Y COMPUTACION'). claveCarrera no expande abreviaturas (SIST/COMP), así que se mapea a mano.",
+    "ELECTRONICA": "'LIC. EN ING. ELECTRÓNICA' del portal es una carrera NUEVA, distinta de las existentes (Electrónica y Telecomunicaciones, Eléctrica y Electrónica, Electrónica Industrial). Verificado directamente. '@NUEVA' la crea en su facultad (FIE) sin borrar nada.",
+    "MECANICA SIN TENDENCIA": "(b) Variante por tendencia de Ingeniería Mecánica ('...( sin Tendencia )'). Sus planes viejos (2024) se pliegan en la carrera canónica 'MECANICA' y su fila, ya vacía, se borra.",
+    "MECANICA TEND ENERGIA Y AMBIENTE": "(b) Variante por tendencia de Ingeniería Mecánica ('...(Tend. en Energia y Ambiente)'). Se pliega en 'MECANICA'. Es distinta de la carrera propia 'Ingeniería de Energía y Ambiente' (clave 'DE ENERGIA Y AMBIENTE'), que NO se toca.",
+    "MECANICA TEND SIST DINAMICOS Y AUTOMATICOS": "(b) Variante por tendencia de Ingeniería Mecánica ('...(Tend.sist. Dinamicos y Automaticos'). Se pliega en 'MECANICA'."
+  },
+  "SIST Y COMP": "DE SISTEMAS Y COMPUTACION",
+  "ELECTRONICA": "@NUEVA",
+  "MECANICA SIN TENDENCIA": "MECANICA",
+  "MECANICA TEND ENERGIA Y AMBIENTE": "MECANICA",
+  "MECANICA TEND SIST DINAMICOS Y AUTOMATICOS": "MECANICA"
+}
