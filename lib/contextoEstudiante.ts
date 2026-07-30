@@ -8,7 +8,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { periodoDeFecha, type Letra, type TipoPeriodo } from "@/lib/calculos";
+import { periodoDeFecha, secuenciaDePeriodo, type Letra, type TipoPeriodo } from "@/lib/calculos";
 import type {
   ContextoEstudiante,
   MateriaCerrada,
@@ -20,11 +20,22 @@ export async function cargarContextoEstudiante(perfil: {
   indiceObjetivo: number | null;
   creditosPlan: number;
 }): Promise<ContextoEstudiante> {
-  // enCurso: todo lo que el estudiante cursa ahora (EN_CURSO existe solo en el
-  // periodo activo). historial: los cursos cerrados de toda la carrera.
-  const [enCursoDb, cerradosDb] = await Promise.all([
+  // El periodo vigente sale de la fecha: la app NO cierra semestres por fecha.
+  const actual = periodoDeFecha();
+
+  // enCurso son los cursos abiertos DEL PERIODO VIGENTE. La garantía de que no se
+  // cuelen semestres viejos es el filtro por PERIODO, no el estado: como la app
+  // no cierra por fecha, quien olvidó cerrar un semestre y ya agregó el siguiente
+  // tiene cursos EN_CURSO de dos periodos a la vez. Sin acotar por periodo,
+  // enCurso mezclaría ambos: créditos inflados y consejos sobre materias ya
+  // terminadas. historial: los cursos cerrados de toda la carrera.
+  const [enCursoDb, cerradosDb, cursosPeriodoActual, sinCerrarDb] = await Promise.all([
     prisma.curso.findMany({
-      where: { perfilId: perfil.id, estado: "EN_CURSO" },
+      where: {
+        perfilId: perfil.id,
+        estado: "EN_CURSO",
+        periodo: { anio: actual.anio, tipo: actual.tipo },
+      },
       select: {
         id: true,
         creditos: true,
@@ -58,7 +69,39 @@ export async function cargarContextoEstudiante(perfil: {
         periodo: { select: { anio: true, tipo: true } },
       },
     }),
+    // Total de cursos del periodo vigente, sin importar estado (ver el comentario
+    // de cursosPeriodoActual en ContextoEstudiante).
+    prisma.curso.count({
+      where: { perfilId: perfil.id, periodo: { anio: actual.anio, tipo: actual.tipo } },
+    }),
+    // Cursos que siguen EN_CURSO en periodos que NO son el vigente: semestres que
+    // el estudiante nunca cerró. Solo el periodo, para contarlos por semestre.
+    prisma.curso.findMany({
+      where: {
+        perfilId: perfil.id,
+        estado: "EN_CURSO",
+        NOT: { periodo: { anio: actual.anio, tipo: actual.tipo } },
+      },
+      select: { periodo: { select: { anio: true, tipo: true } } },
+    }),
   ]);
+
+  // Semestres sin cerrar: agrupados por periodo, del más antiguo al más reciente.
+  // Se descartan periodos FUTUROS por si acaso (no deberían existir): solo cuentan
+  // los anteriores al vigente, que son los que dejan el índice por debajo del real.
+  const secActual = secuenciaDePeriodo(actual.anio, actual.tipo);
+  const grupos = new Map<string, { anio: number; periodo: TipoPeriodo; cantidad: number }>();
+  for (const c of sinCerrarDb) {
+    const tipo = c.periodo.tipo as TipoPeriodo;
+    if (secuenciaDePeriodo(c.periodo.anio, tipo) >= secActual) continue;
+    const clave = `${c.periodo.anio}-${tipo}`;
+    const g = grupos.get(clave) ?? { anio: c.periodo.anio, periodo: tipo, cantidad: 0 };
+    g.cantidad++;
+    grupos.set(clave, g);
+  }
+  const cursosSinCerrar = [...grupos.values()].sort(
+    (a, b) => secuenciaDePeriodo(a.anio, a.periodo) - secuenciaDePeriodo(b.anio, b.periodo),
+  );
 
   const enCurso: MateriaEnCurso[] = enCursoDb.map((c) => ({
     cursoId: c.id,
@@ -73,18 +116,6 @@ export async function cargarContextoEstudiante(perfil: {
       notas: s.notas.map((n) => ({ puntaje: n.puntaje, puntajeMax: n.puntajeMax })),
     })),
   }));
-
-  // Total de cursos del periodo activo, sin importar su estado. Distingue "aún
-  // no agregó materias" de "ya cerró el semestre" (sus cursos pasaron a APROBADO
-  // y enCurso quedó vacío). Sin esto, tras cerrar sugería agregar lo ya cursado.
-  const actual = periodoDeFecha();
-  const periodoActivo = await prisma.periodo.findUnique({
-    where: { anio_tipo: { anio: actual.anio, tipo: actual.tipo } },
-    select: { id: true },
-  });
-  const cursosPeriodoActual = periodoActivo
-    ? await prisma.curso.count({ where: { perfilId: perfil.id, periodoId: periodoActivo.id } })
-    : 0;
 
   const historial: MateriaCerrada[] = cerradosDb.map((c) => ({
     cursoId: c.id,
@@ -103,6 +134,7 @@ export async function cargarContextoEstudiante(perfil: {
   return {
     enCurso,
     cursosPeriodoActual,
+    cursosSinCerrar,
     historial,
     indiceObjetivo: perfil.indiceObjetivo,
     creditosPlan: perfil.creditosPlan,

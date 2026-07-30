@@ -3,6 +3,7 @@ import type { Categoria, Recomendacion, Severidad } from "@/lib/recomendaciones"
 
 // Tono visual por categoría (item 3 del encargo):
 //   riesgo / bloqueo → rojo o ámbar según severidad
+//   mantenimiento    → ámbar (atención, no mala noticia académica: distinto del rojo)
 //   meta / carrera   → acento (ciruela)
 //   logro            → verde
 //   oportunidad      → acento suave
@@ -14,6 +15,9 @@ function tonoDe(categoria: Categoria, severidad: Severidad): Tono {
     case "riesgo":
     case "bloqueo":
       return severidad === "critica" || severidad === "alta" ? "rojo" : "ambar";
+    // Atención sobre los DATOS, no una mala noticia académica: ámbar, no rojo.
+    case "mantenimiento":
+      return "ambar";
     case "meta":
     case "carrera":
       return "acento";

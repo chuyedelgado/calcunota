@@ -77,6 +77,20 @@ export type ContextoEstudiante = {
    */
   cursosPeriodoActual?: number;
   historial: MateriaCerrada[];
+  /**
+   * Cursos que siguen EN_CURSO en periodos ANTERIORES al vigente: semestres que
+   * el estudiante nunca cerró.
+   *
+   * Ocurre en uso normal, sin ningún bug: la app no cierra semestres por fecha,
+   * así que basta con que alguien termine julio sin cerrar y en agosto agregue
+   * las materias nuevas. Mientras no cierre, esos cursos no tienen nota final y
+   * NO cuentan para el índice, así que su índice está mal y no lo sabe.
+   *
+   * Desglosado por periodo, del más antiguo al más reciente. Vacío = al día.
+   * Si no se provee, se asume vacío.
+   */
+  cursosSinCerrar?: { anio: number; periodo: TipoPeriodo; cantidad: number }[];
+
   /** Meta de índice acumulado, si la definió */
   indiceObjetivo: number | null;
   /** Créditos totales del plan de estudio */
@@ -95,6 +109,7 @@ export type Categoria =
   | "logro" // algo ya asegurado
   | "oportunidad" // puede mejorar el índice
   | "patron" // observación sobre su desempeño
+  | "mantenimiento" // acción para que los datos de la app reflejen la realidad
   | "vacio"; // faltan datos para poder decir algo
 
 export type Severidad = "critica" | "alta" | "media" | "baja";
@@ -568,6 +583,50 @@ function patronesDeDesempeno(ctx: ContextoEstudiante): Recomendacion[] {
 }
 
 /**
+ * Semestres que quedaron sin cerrar.
+ *
+ * Es el único aviso del motor sobre los DATOS y no sobre las notas: mientras
+ * esos cursos sigan abiertos, sus créditos no entran al índice y el número que
+ * ve el estudiante está por debajo del real. Puede pasar meses tomando
+ * decisiones sobre una cifra equivocada sin sospecharlo, así que la severidad
+ * es alta.
+ *
+ * Un solo aviso agregado, no uno por periodo: la acción es la misma para todos
+ * y repetirla sería ruido.
+ */
+function semestresSinCerrar(ctx: ContextoEstudiante): Recomendacion[] {
+  const pendientes = ctx.cursosSinCerrar ?? [];
+  if (pendientes.length === 0) return [];
+
+  const materias = pendientes.reduce((a, p) => a + p.cantidad, 0);
+  if (materias === 0) return [];
+
+  const nombres = pendientes.map((p) => nombrePeriodo(p.anio, p.periodo));
+
+  const titulo =
+    pendientes.length === 1
+      ? `Tienes ${materias} materia${materias > 1 ? "s" : ""} sin cerrar de ${nombres[0]}`
+      : `Tienes ${materias} materias sin cerrar de ${pendientes.length} semestres`;
+
+  const detalle =
+    `Mientras no las cierres, sus créditos no cuentan para tu índice y el número ` +
+    `que ves está por debajo del real.` +
+    (pendientes.length > 1 ? ` Son de ${nombres.join(" y ")}.` : "");
+
+  return [
+    {
+      id: "mantenimiento-sin-cerrar",
+      categoria: "mantenimiento",
+      severidad: "alta",
+      titulo,
+      detalle,
+      accion: { texto: "Cerrar semestre", ruta: "/semestre/cerrar" },
+      peso: 95,
+    },
+  ];
+}
+
+/**
  * Cuando faltan datos, la respuesta correcta es pedirlos, no inventar consejos.
  */
 function faltanDatos(ctx: ContextoEstudiante): Recomendacion[] {
@@ -667,6 +726,7 @@ export function generarRecomendaciones(
   const limite = opciones.limite ?? 6;
 
   const todas = [
+    ...semestresSinCerrar(ctx),
     ...riesgoDeReprobar(ctx),
     ...bloqueosDeGraduacion(ctx),
     ...metasAccionables(ctx),
