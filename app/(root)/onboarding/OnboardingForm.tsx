@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { etiquetaVersionPlan, ordenarPlanes, textoOpcionPlan, type PlanOpcion } from "@/lib/planes";
 import { crearPerfil, type EstadoOnboarding } from "./actions";
 
 // Árbol que llega desde el Server Component en una sola consulta.
@@ -12,9 +13,19 @@ export type FacultadArbol = {
     id: string;
     nombre: string;
     grado: string;
-    planes: { id: string; version: string; totalCreditos: number }[];
+    planes: PlanOpcion[];
   }[];
 };
+
+// Ayuda que resuelve la confusión de fondo: el plan lo fija el año de INGRESO.
+function AyudaPlan() {
+  return (
+    <p className="text-14-normal !text-black-300 mt-2">
+      Elige el plan del año en que <strong>entraste</strong> a la carrera, no el del año actual. Si
+      no lo recuerdas, reconócelo por sus créditos y número de materias.
+    </p>
+  );
+}
 
 const GRADO_LABEL: Record<string, string> = {
   TECNICO: "Técnico",
@@ -123,27 +134,31 @@ export default function OnboardingForm({
           {planUnico ? (
             <>
               <input type="hidden" name="planId" value={planUnico.id} />
-              <p className={`${campo} !bg-gray-100`}>
-                {planUnico.version} · {planUnico.totalCreditos} créditos{" "}
-                <span className="text-black-300">(único plan)</span>
+              <p className={`${campo} !bg-crema`}>
+                {etiquetaVersionPlan(planUnico.version)} · {planUnico.totalCreditos} créditos ·{" "}
+                {planUnico.materias} materias{" "}
+                <span className="!text-black-300">(único plan)</span>
               </p>
             </>
           ) : (
-            <select
-              id="planId"
-              name="planId"
-              className={campo}
-              value={planId}
-              onChange={(e) => setPlanId(e.target.value)}
-              required
-            >
-              <option value="">Selecciona tu plan…</option>
-              {planes.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.version} · {p.totalCreditos} créditos
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                id="planId"
+                name="planId"
+                className={campo}
+                value={planId}
+                onChange={(e) => setPlanId(e.target.value)}
+                required
+              >
+                <option value="">Selecciona tu plan…</option>
+                {ordenarPlanes(planes).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {textoOpcionPlan(p, planes)}
+                  </option>
+                ))}
+              </select>
+              <AyudaPlan />
+            </>
           )}
         </div>
       )}

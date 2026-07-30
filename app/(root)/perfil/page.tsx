@@ -44,7 +44,7 @@ export default async function PerfilPage() {
 
   // Árbol facultades → carreras → planes de la UTP para la cascada (igual que el
   // onboarding), y los cursos para proyectar el objetivo en vivo.
-  const facultades: FacultadArbol[] = await prisma.facultad.findMany({
+  const facultadesRaw = await prisma.facultad.findMany({
     where: { universidad: { siglas: "UTP" } },
     orderBy: { nombre: "asc" },
     select: {
@@ -58,23 +58,62 @@ export default async function PerfilPage() {
           grado: true,
           planes: {
             orderBy: { version: "desc" },
-            select: { id: true, version: true, totalCreditos: true },
+            select: {
+              id: true,
+              version: true,
+              totalCreditos: true,
+              vigente: true,
+              _count: { select: { materias: true } },
+            },
           },
         },
       },
     },
   });
+  const facultades: FacultadArbol[] = facultadesRaw.map((f) => ({
+    ...f,
+    carreras: f.carreras.map((c) => ({
+      ...c,
+      planes: c.planes.map((p) => ({
+        id: p.id,
+        version: p.version,
+        totalCreditos: p.totalCreditos,
+        vigente: p.vigente,
+        materias: p._count.materias,
+      })),
+    })),
+  }));
   const cursos = await prisma.curso.findMany({
     where: { perfilId: perfil.id },
     select: {
       id: true,
       materiaId: true,
       creditos: true,
+      estado: true,
       notaFinal: true,
       letraFinal: true,
       periodo: { select: { anio: true, tipo: true } },
     },
   });
+
+  // Créditos aprobados para el "avance", con el MISMO criterio que /carrera:
+  // una materia cuenta una sola vez, por su mejor estado (aprobada > en curso >
+  // reprobada). Así el antes/después de cambiar de plan coincide con lo que el
+  // estudiante ve en su carrera.
+  type EstadoMat = "aprobada" | "en_curso" | "reprobada";
+  const rank = (e: EstadoMat) => (e === "aprobada" ? 3 : e === "en_curso" ? 2 : 1);
+  const mejorPorMateria = new Map<string, { estado: EstadoMat; creditos: number }>();
+  for (const c of cursos) {
+    const actual: EstadoMat =
+      c.estado === "APROBADO" ? "aprobada" : c.estado === "EN_CURSO" ? "en_curso" : "reprobada";
+    const prev = mejorPorMateria.get(c.materiaId);
+    if (!prev || rank(actual) > rank(prev.estado)) {
+      mejorPorMateria.set(c.materiaId, { estado: actual, creditos: c.creditos });
+    }
+  }
+  const creditosAprobados = [...mejorPorMateria.values()]
+    .filter((m) => m.estado === "aprobada")
+    .reduce((a, m) => a + m.creditos, 0);
 
   const acumulado = calcularIndiceDesdeCursos(
     cursos.map((c) => ({
@@ -129,6 +168,7 @@ export default async function PerfilPage() {
             carreraIdInicial={perfil.plan.carrera.id}
             planIdInicial={perfil.planId}
             anioIngresoInicial={perfil.anioIngreso}
+            creditosAprobados={creditosAprobados}
           />
         </div>
       </div>

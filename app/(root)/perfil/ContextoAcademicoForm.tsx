@@ -2,6 +2,12 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  etiquetaVersionPlan,
+  ordenarPlanes,
+  textoOpcionPlan,
+  type PlanOpcion,
+} from "@/lib/planes";
 import type { FacultadArbol } from "../onboarding/OnboardingForm";
 import { actualizarContextoAcademico, type EstadoPerfil } from "./actions";
 
@@ -27,6 +33,7 @@ export default function ContextoAcademicoForm({
   carreraIdInicial,
   planIdInicial,
   anioIngresoInicial,
+  creditosAprobados,
 }: {
   facultades: FacultadArbol[];
   anioActual: number;
@@ -34,6 +41,7 @@ export default function ContextoAcademicoForm({
   carreraIdInicial: string;
   planIdInicial: string;
   anioIngresoInicial: number;
+  creditosAprobados: number;
 }) {
   const [estado, formAction, pendiente] = useActionState<EstadoPerfil, FormData>(
     actualizarContextoAcademico,
@@ -50,8 +58,20 @@ export default function ContextoAcademicoForm({
   const planes = carrera?.planes ?? [];
   const planUnico = planes.length === 1 ? planes[0] : null;
 
+  // Todos los planes del árbol, para localizar el actual aunque el usuario haya
+  // cambiado de carrera en el formulario.
+  const todosLosPlanes: PlanOpcion[] = facultades.flatMap((f) =>
+    f.carreras.flatMap((c) => c.planes),
+  );
+  const planActual = todosLosPlanes.find((p) => p.id === planIdInicial) ?? null;
+  const planNuevoId = planUnico?.id ?? planId;
+  const planNuevo = todosLosPlanes.find((p) => p.id === planNuevoId) ?? null;
+
   // El plan que se guardaría difiere del actual: avisa del recálculo.
-  const cambiaPlan = (planUnico?.id ?? planId) !== planIdInicial;
+  const cambiaPlan = planNuevoId !== planIdInicial;
+
+  const avance = (aprobados: number, total: number) =>
+    total > 0 ? Math.min(100, Math.round((aprobados / total) * 100)) : 0;
 
   function onFacultad(v: string) {
     setFacultadId(v);
@@ -121,26 +141,32 @@ export default function ContextoAcademicoForm({
             <>
               <input type="hidden" name="planId" value={planUnico.id} />
               <p className={`${campo} !bg-crema`}>
-                {planUnico.version} · {planUnico.totalCreditos} créditos{" "}
-                <span className="!text-black-300">(único plan)</span>
+                {etiquetaVersionPlan(planUnico.version)} · {planUnico.totalCreditos} créditos ·{" "}
+                {planUnico.materias} materias <span className="!text-black-300">(único plan)</span>
               </p>
             </>
           ) : (
-            <select
-              id="planId"
-              name="planId"
-              className={campo}
-              value={planId}
-              onChange={(e) => setPlanId(e.target.value)}
-              required
-            >
-              <option value="">Selecciona tu plan…</option>
-              {planes.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.version} · {p.totalCreditos} créditos
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                id="planId"
+                name="planId"
+                className={campo}
+                value={planId}
+                onChange={(e) => setPlanId(e.target.value)}
+                required
+              >
+                <option value="">Selecciona tu plan…</option>
+                {ordenarPlanes(planes).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {textoOpcionPlan(p, planes)}
+                  </option>
+                ))}
+              </select>
+              <p className="text-14-normal !text-black-300 mt-2">
+                El plan lo fija el año en que <strong>entraste</strong> a la carrera, no el año
+                actual. Reconócelo por sus créditos y número de materias.
+              </p>
+            </>
           )}
         </div>
       )}
@@ -162,12 +188,39 @@ export default function ContextoAcademicoForm({
         />
       </div>
 
-      {/* Advertencia: cambiar de plan recalcula el avance, pero no borra cursos */}
+      {/* Advertencia clara antes de guardar: qué cambia y qué no. Reversible. */}
       {cambiaPlan && (
-        <p className="text-14-normal rounded-xl px-4 py-3 bg-ambar-suave !text-ambar-fuerte">
-          ⚠ Cambiar de plan recalcula tu avance de carrera. Tus cursos ya cargados no se pierden
-          (quedan asociados a la materia, no al plan).
-        </p>
+        <div className="rounded-xl px-4 py-3 bg-ambar-suave border border-ambar-fuerte/30 space-y-2">
+          <p className="text-16-medium font-semibold !text-ambar-fuerte">⚠ Vas a cambiar de plan</p>
+          <ul className="text-14-normal !text-tinta space-y-1 list-disc pl-5">
+            <li>
+              Tus cursos y notas ya cargados <strong>no se pierden</strong> (quedan asociados a la
+              materia, no al plan).
+            </li>
+            <li>
+              Tu <strong>índice acumulado no cambia</strong>.
+            </li>
+            <li>
+              Sí cambia tu <strong>avance de carrera</strong>, porque el total de créditos del plan
+              es distinto.
+            </li>
+            <li>
+              Si una materia que cursaste no existe en el plan nuevo, sigue contando para el índice
+              pero <strong>no para el avance</strong>.
+            </li>
+          </ul>
+          {planActual && planNuevo && (
+            <p className="text-14-normal !text-tinta font-semibold">
+              Tu plan actual tiene {planActual.totalCreditos} créditos; el nuevo,{" "}
+              {planNuevo.totalCreditos}. Tu avance pasaría de{" "}
+              {avance(creditosAprobados, planActual.totalCreditos)}% a{" "}
+              {avance(creditosAprobados, planNuevo.totalCreditos)}%.
+            </p>
+          )}
+          <p className="text-14-normal !text-black-300">
+            Es reversible: nada se borra, puedes volver al plan anterior cuando quieras.
+          </p>
+        </div>
       )}
 
       {estado?.error && (

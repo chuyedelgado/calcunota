@@ -22,7 +22,7 @@ export default async function OnboardingPage() {
 
   // 3. Árbol completo facultades → carreras → planes de la UTP en UNA consulta
   //    (~120 registros). El Client Component filtra en memoria.
-  const facultades: FacultadArbol[] = await prisma.facultad.findMany({
+  const facultadesRaw = await prisma.facultad.findMany({
     where: { universidad: { siglas: "UTP" } },
     orderBy: { nombre: "asc" },
     select: {
@@ -36,12 +36,31 @@ export default async function OnboardingPage() {
           grado: true,
           planes: {
             orderBy: { version: "desc" },
-            select: { id: true, version: true, totalCreditos: true },
+            select: {
+              id: true,
+              version: true,
+              totalCreditos: true,
+              vigente: true,
+              _count: { select: { materias: true } },
+            },
           },
         },
       },
     },
   });
+  const facultades: FacultadArbol[] = facultadesRaw.map((f) => ({
+    ...f,
+    carreras: f.carreras.map((c) => ({
+      ...c,
+      planes: c.planes.map((p) => ({
+        id: p.id,
+        version: p.version,
+        totalCreditos: p.totalCreditos,
+        vigente: p.vigente,
+        materias: p._count.materias,
+      })),
+    })),
+  }));
 
   const anioActual = new Date().getFullYear();
 
