@@ -235,7 +235,10 @@ alguien más están **completas**:
    enlazadas desde el pie (`components/Footer.tsx`) y el registro (onboarding).
 2. **Eliminación de cuenta** — zona de peligro en `/perfil` con confirmación
    escrita; borra el `User` y en cascada todo su expediente (los `Profesor` son
-   catálogo compartido y **no** se borran; el texto lo aclara).
+   catálogo compartido y **no** se borran; el texto lo aclara). **Verificada** en
+   desarrollo con cuenta desechable: la cuenta se eliminó, el conteo de `Profesor`
+   se mantuvo, y al reingresar con la misma cuenta de Google se la trató como
+   usuario nuevo (fue al onboarding).
 3. **Manejo de errores** — `app/(root)/error.tsx`, `app/not-found.tsx` y
    `app/global-error.tsx` (red de último recurso con estilos en línea).
 4. **Retroalimentación** — enlace a WhatsApp (`lib/reporte.ts`,
