@@ -179,11 +179,14 @@ Pendiente de verdad:
 1. **`lib/calculos.ts` no tiene tests.** No hay Vitest/Jest ni script `test` en el
    repo. El motor es aritmético puro y es lo primero que debería cubrirse; los
    casos de las reglas UTP de arriba son la lista de pruebas natural.
-2. **Auth no persiste.** `@auth/prisma-adapter` está instalado pero `auth.ts` no
-   lo conecta: la sesión sigue siendo sólo un JWT en cookie y no hay usuarios en
-   la base. Al añadir el adapter las sesiones pasan a base de datos; si luego se
-   agrega `middleware.ts`, Prisma no corre en runtime edge y hay que separar la
-   config en `auth.config.ts`.
+2. **Sesión en JWT, no en base (los usuarios SÍ persisten).** `auth.ts` conecta
+   `PrismaAdapter(prisma)`: en el login se crean `User` y `Account` (el vínculo
+   con Google) vía `createUser`/`linkAccount`. Lo único que NO va a la base es la
+   **sesión**, que vive como JWT en cookie firmada (`session: { strategy: "jwt" }`),
+   a propósito. Consecuencia práctica: eliminar un `User` arrastra en cascada su
+   `PerfilEstudiante`, `Curso`, `Seccion`, `Nota` y `Account`. Si luego se agrega
+   `middleware.ts`, Prisma no corre en runtime edge y hay que separar la config
+   en `auth.config.ts`.
 3. **Secretos a rotar.** Credenciales que estuvieron expuestas (`.env`,
    contraseña de MySQL del scraper legado) deben rotarse.
 4. **Vulnerabilidades de npm.** Sanity ya se eliminó (bajó de ~74 a ~21). Las
@@ -206,8 +209,10 @@ Pendiente de verdad:
 
 1. Tests de `lib/calculos.ts` (Vitest). Es el corazón del producto y hoy no está
    cubierto; hacerlo antes de construir la UI encima.
-2. Conectar `PrismaAdapter` en `auth.ts` para que los usuarios persistan (ver
-   deuda #2 sobre el runtime edge si se añade middleware).
+2. ~~Conectar `PrismaAdapter`~~ **Hecho**: `auth.ts` ya persiste `User`/`Account`
+   (ver deuda #2). Lo que queda del lado de auth es, si se añade `middleware.ts`
+   para proteger rutas, separar la config en `auth.config.ts` (Prisma no corre en
+   runtime edge).
 3. Onboarding del perfil: elegir universidad → facultad → carrera → plan → año de
    ingreso. Crea `PerfilEstudiante`. Sin esto nada más funciona.
 4. Agregar materia al semestre: elegir del plan, asignar profesor, definir

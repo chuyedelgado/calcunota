@@ -8,6 +8,7 @@ import { cerrarSesion } from "../nav-actions";
 import type { FacultadArbol } from "../onboarding/OnboardingForm";
 import ContextoAcademicoForm from "./ContextoAcademicoForm";
 import ObjetivoForm from "./ObjetivoForm";
+import EliminarCuentaForm from "./EliminarCuentaForm";
 
 export default async function PerfilPage() {
   const session = await auth();
@@ -199,6 +200,11 @@ export default async function PerfilPage() {
             Cerrar sesión
           </button>
         </form>
+      </div>
+
+      {/* 5. Zona de peligro: eliminar cuenta y todos los datos */}
+      <div className="mt-8">
+        <EliminarCuentaForm />
       </div>
     </section>
   );

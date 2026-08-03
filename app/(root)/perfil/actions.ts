@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 export type EstadoPerfil = { ok?: boolean; error?: string; mensaje?: string };
@@ -132,4 +132,36 @@ export async function actualizarObjetivo(
     ok: true,
     mensaje: indiceObjetivo === null ? "Quitaste tu índice objetivo." : "Índice objetivo guardado.",
   };
+}
+
+// Elimina la cuenta y TODOS los datos del estudiante. Borrar el User dispara la
+// cascada del esquema: PerfilEstudiante → Curso → Seccion → Nota, y las cuentas
+// de OAuth (Account). Las sesiones son JWT en cookie: las cierra signOut. Exige
+// confirmación escrita ("ELIMINAR"), no un solo clic.
+export async function eliminarCuenta(_prev: EstadoPerfil, formData: FormData): Promise<EstadoPerfil> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/");
+  }
+  const userId = session.user.id;
+
+  const confirmacion = String(formData.get("confirmacion") ?? "").trim();
+  if (confirmacion !== "ELIMINAR") {
+    return { error: "Escribe ELIMINAR (en mayúsculas) para confirmar." };
+  }
+
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+  } catch (e) {
+    // P2025: el registro ya no existe (doble envío). Se trata como éxito y se
+    // cierra la sesión igual. Cualquier otro error se reporta.
+    if (!(e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2025")) {
+      return { error: "No se pudo eliminar la cuenta. Intenta de nuevo." };
+    }
+  }
+
+  // Borra la cookie de sesión y saca al usuario a la landing. signOut redirige
+  // (lanza NEXT_REDIRECT), así que lo de abajo no se alcanza.
+  await signOut({ redirectTo: "/" });
+  return {};
 }
