@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { etiquetaVersionPlan, ordenarPlanes, textoOpcionPlan, type PlanOpcion } from "@/lib/planes";
@@ -207,6 +208,18 @@ export default function OnboardingForm({
       <Button type="submit" className="calcular_btn w-full" disabled={pendiente}>
         {pendiente ? "Guardando…" : "Guardar perfil"}
       </Button>
+
+      <p className="text-14-normal !text-black-300 text-center">
+        Al guardar tu perfil aceptas los{" "}
+        <Link href="/terminos" className="font-semibold !text-primary-ink underline underline-offset-2">
+          Términos
+        </Link>{" "}
+        y la{" "}
+        <Link href="/privacidad" className="font-semibold !text-primary-ink underline underline-offset-2">
+          Política de privacidad
+        </Link>
+        .
+      </p>
     </form>
   );
 }
