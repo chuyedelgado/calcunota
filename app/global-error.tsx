@@ -1,5 +1,7 @@
 "use client";
 
+import { urlReporte } from "@/lib/reporte";
+
 // Último recurso: atrapa un fallo en el propio layout raíz, donde error.tsx ya no
 // alcanza. Reemplaza todo el documento, así que trae su <html>/<body> y usa
 // estilos en línea (no hay CSS del layout aquí). Es la red que evita la pantalla
@@ -41,6 +43,17 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
           >
             Reintentar
           </button>
+          <p style={{ fontSize: "0.875rem", color: "#6b625a", marginTop: "1rem" }}>
+            ¿Sigue fallando?{" "}
+            <a
+              href={urlReporte()}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#5E3049", fontWeight: 600 }}
+            >
+              Repórtalo
+            </a>
+          </p>
         </div>
       </body>
     </html>

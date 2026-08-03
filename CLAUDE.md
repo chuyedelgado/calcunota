@@ -226,6 +226,28 @@ El motor de probabilidades va después, alimentado por los `Curso` cerrados que
 generen los primeros usuarios. El esquema ya guarda profesor, periodo y nota final
 desde el día uno para que ese histórico exista cuando haga falta.
 
+## Fase 3 — lanzamiento (beta)
+
+Funciones nuevas **congeladas**. Las cuatro tareas para poder entregarle la app a
+alguien más están **completas**:
+
+1. **Privacidad y términos** — rutas `/privacidad` y `/terminos` (texto propio),
+   enlazadas desde el pie (`components/Footer.tsx`) y el registro (onboarding).
+2. **Eliminación de cuenta** — zona de peligro en `/perfil` con confirmación
+   escrita; borra el `User` y en cascada todo su expediente (los `Profesor` son
+   catálogo compartido y **no** se borran; el texto lo aclara).
+3. **Manejo de errores** — `app/(root)/error.tsx`, `app/not-found.tsx` y
+   `app/global-error.tsx` (red de último recurso con estilos en línea).
+4. **Retroalimentación** — enlace a WhatsApp (`lib/reporte.ts`,
+   `components/EnlaceReporte.tsx`) con mensaje prellenado (ruta + error, sin datos
+   personales), en el pie y en las pantallas de error.
+
+Lo que queda antes de la beta (fuera del código):
+
+- **Agregar los usuarios de prueba en Google** (pantalla de consentimiento OAuth
+  en modo prueba): sin esto solo el dueño del proyecto puede iniciar sesión.
+- **Reclutar la beta** y abrir el grupo de WhatsApp.
+
 ## Comandos
 
 ```bash

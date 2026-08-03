@@ -1,4 +1,5 @@
 import Link from "next/link";
+import EnlaceReporte from "@/components/EnlaceReporte";
 
 // 404 global: enlace o página que no existe. Se renderiza dentro del layout raíz
 // (sin la navegación del sitio), así que se vale por sí misma y ofrece salida.
@@ -17,6 +18,12 @@ export default function NotFound() {
         >
           Volver al inicio
         </Link>
+        <p className="text-14-normal !text-black-300 mt-5">
+          ¿Sigue fallando?{" "}
+          <EnlaceReporte detalle="404" className="font-semibold !text-primary-ink underline underline-offset-2">
+            Repórtalo
+          </EnlaceReporte>
+        </p>
       </div>
     </main>
   );

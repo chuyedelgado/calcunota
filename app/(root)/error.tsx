@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import EnlaceReporte from "@/components/EnlaceReporte";
 
 // Límite de error de las páginas del sitio: atrapa fallos en tiempo de ejecución
 // (por ejemplo, una consulta a la base que no responde) y muestra algo
@@ -18,6 +19,12 @@ export default function Error({
     // Deja rastro en la consola para depurar; al usuario no se le muestra.
     console.error(error);
   }, [error]);
+
+  // Detalle técnico para el reporte (sin datos personales): mensaje y digest.
+  const detalle = [error.message, error.digest ? `ref ${error.digest}` : null]
+    .filter(Boolean)
+    .join(" · ")
+    .slice(0, 200);
 
   return (
     <section className="section_container max-w-md text-center">
@@ -45,6 +52,15 @@ export default function Error({
             Ir a mi semestre
           </Link>
         </div>
+        <p className="text-14-normal !text-black-300 mt-5">
+          ¿Sigue fallando?{" "}
+          <EnlaceReporte
+            detalle={detalle}
+            className="font-semibold !text-primary-ink underline underline-offset-2"
+          >
+            Repórtalo
+          </EnlaceReporte>
+        </p>
       </div>
     </section>
   );
