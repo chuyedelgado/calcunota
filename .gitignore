@@ -55,3 +55,11 @@ skills-lock.json
 next-env.d.ts
 
 /lib/generated/prisma
+
+# Volcados de base de datos: contienen expedientes reales de estudiantes.
+# Nunca deben acercarse al repo, aunque se generen a mano en una migración.
+*.sql
+*.dump
+# …salvo las migraciones de Prisma, que SÍ van versionadas: sin ellas el
+# `migrate deploy` del build no tendría nada que aplicar.
+!prisma/migrations/**/*.sql

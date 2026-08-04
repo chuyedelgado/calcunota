@@ -82,12 +82,43 @@ corren en paralelo**.
       base**. Si consultara Postgres, un hipo de la base haría que DO reiniciara
       la app en bucle.
 
+### ⚠️ La cadena de DigitalOcean no sirve tal cual: hay que añadirle dos parámetros
+
+DigitalOcean firma sus bases con una **CA propia autofirmada**. El driver `pg`
+(el que usa `@prisma/adapter-pg`) trata `sslmode=require` como `verify-full`, así
+que **la conexión ni se abre**:
+
+```
+Error opening a TLS connection: self-signed certificate in certificate chain
+```
+
+Comprobado contra la base real:
+
+| Cadena | Resultado |
+|---|---|
+| tal cual la da DigitalOcean | **falla** |
+| `?uselibpqcompat=true&sslmode=require` | **funciona** |
+| `?sslmode=no-verify` | funciona |
+
+**Usar `uselibpqcompat=true&sslmode=require`** en `DATABASE_URL` y en
+`DIRECT_DATABASE_URL`. Le pide a `pg` la semántica de libpq, que es la que asume
+la propia cadena de DigitalOcean: **cifra la conexión, pero no verifica la
+identidad del servidor**. Dentro de la red privada de DO es lo estándar y es lo
+que hace `psql`.
+
+Endurecerlo después (no bloquea el lanzamiento): descargar la CA de DigitalOcean
+y pasar `sslmode=verify-full&sslrootcert=<ruta>`, que sí autentica al servidor.
+
+`psql` y `pg_dump` **no** necesitan nada de esto: su `sslmode=require` ya
+significa "cifra sin verificar". Por eso la copia funcionó antes de que
+apareciera el problema, y el fallo solo se ve desde la app.
+
 ### Variables de entorno que hay que poner en App Platform
 
 | Variable | Valor | Cifrada |
 |---|---|---|
-| `DATABASE_URL` | cadena **agrupada** (connection pool, modo *transaction*) | sí |
-| `DIRECT_DATABASE_URL` | cadena **directa** — la usa `migrate deploy` en el build | sí |
+| `DATABASE_URL` | cadena **agrupada** (pool, modo *transaction*) **+ `?uselibpqcompat=true&sslmode=require`** | sí |
+| `DIRECT_DATABASE_URL` | cadena **directa** **+ los mismos dos parámetros** — la usa `migrate deploy` en el build | sí |
 | `AUTH_SECRET` | el mismo que hoy (cambiarlo invalida las sesiones) | sí |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | los de Google Cloud Console | sí |
 | `AUTH_TRUST_HOST` | `true` | no |
@@ -118,8 +149,8 @@ corren en paralelo**.
 - [x] 2.2 Connection pool (modo *transaction*) creado
 - [ ] 2.3 **Trusted Sources**: añadir tu IP (para migrar) y después la App
 - [x] 2.4 Cadenas entregadas por el canal seguro
-- [ ] 2.5 **[YO]** `prisma migrate deploy` contra la **directa** → crea el esquema
-- [ ] 2.6 **[YO]** copiar solo los datos desde Neon y verificar
+- [x] 2.5 **[YO]** `prisma migrate deploy` contra la **directa** → 21 tablas, 4 migraciones
+- [x] 2.6 **[YO]** datos copiados desde Neon y **verificados: sin diferencias**
 
 ### Por qué esquema y datos van por separado
 
@@ -130,14 +161,29 @@ repo, sin arrastrar nada del entorno de Neon.
 
 ```bash
 # 1. esquema, con la cadena DIRECTA
-DATABASE_URL="<directa>" npx prisma migrate deploy
+DIRECT_DATABASE_URL="<directa>" npx prisma migrate deploy
 
-# 2. solo las filas, desde Neon (pg_dump únicamente LEE: origen intacto)
-pg_dump "<neon>" --data-only --exclude-table=_prisma_migrations > datos.sql
+# 2. solo las filas, desde Neon (pg_dump únicamente LEE: origen intacto).
+#    OJO con la versión del cliente: pg_dump 16 ABORTA contra un servidor 18.
+#    En este equipo el bueno es /opt/homebrew/opt/libpq@18/bin/pg_dump (18.4).
+pg_dump "<neon>" --data-only --exclude-table=_prisma_migrations \
+        --no-owner --no-privileges > datos.sql
 
-# 3. cargarlas en DO
-psql "<directa>" < datos.sql
+# 3. cargarlas en DO. session_replication_role=replica desactiva la comprobación
+#    de claves ajenas: pg_dump --data-only emite las tablas en orden ALFABÉTICO,
+#    así que Account entra antes que User y reventaría en la primera fila.
+#    (Funciona con el usuario doadmin aunque no sea superusuario.)
+psql "<directa>" --single-transaction -v ON_ERROR_STOP=1 \
+     -c "set session_replication_role = replica;" -f datos.sql
+
+# 4. BORRAR el volcado: contiene expedientes reales.
+rm datos.sql
 ```
+
+`datos.sql` pesa ~2 MB y lleva notas, cursos y correos. `.gitignore` ignora
+`*.sql` y `*.dump`, **con una excepción explícita para
+`prisma/migrations/**/*.sql`**: sin ella las migraciones dejarían de versionarse
+y el `migrate deploy` del build no tendría nada que aplicar.
 
 Excluir `_prisma_migrations` es clave: `migrate deploy` ya escribió sus propias
 filas ahí y duplicarlas rompería el historial. Todos los ids son `cuid()` (texto,
