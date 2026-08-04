@@ -189,10 +189,20 @@ Pendiente de verdad:
    en `auth.config.ts`.
 3. **Secretos a rotar.** Credenciales que estuvieron expuestas (`.env`,
    contraseña de MySQL del scraper legado) deben rotarse.
-4. **Vulnerabilidades de npm.** Sanity ya se eliminó (bajó de ~74 a ~21). Las
-   que quedan vienen de `next-auth@beta` (los 3 críticos) y del toolchain de
-   Prisma y de build (eslint/postcss/sharp/lodash, transitivos). **No correr**
-   `npm audit fix --force`: baja Prisma a 6.x y rompe el proyecto.
+4. **Vulnerabilidades de npm.** Sanity ya se eliminó (bajó de ~74 a ~21). Cifras
+   verificadas en la auditoría de agosto de 2026: **21 en total (2 críticas, 13
+   altas, 4 moderadas, 2 bajas)**; 17 figuran como de producción, pero la mayoría
+   son del toolchain de build que `npm audit` no sabe distinguir.
+   - Las **2 críticas son de `@auth/core`/`next-auth` y NO son explotables aquí**:
+     una es de `getToken()` con cabeceras `Bearer` (el código usa `auth()`, no
+     `getToken()`), y las otras dos son del **proveedor Email**, que no se usa
+     (solo Google). Van con Next 16 en septiembre, no antes.
+   - Con superficie de runtime real solo queda **`sharp`** (CVEs heredadas de
+     libvips), que interviene al optimizar los avatares remotos de Google.
+   - `postcss`, `lodash`, `js-yaml`, `minimatch`, `glob`, `picomatch` y las de
+     `@prisma/dev` son de build o de CLI: no llegan al servidor en ejecución.
+
+   **No correr** `npm audit fix --force`: baja Prisma a 6.x y rompe el proyecto.
 5. **Migración a Next 16 y salida de la beta de `next-auth` — septiembre de
    2026.** Van juntas. (a) Estamos en Next 15.5.21 (LTS de mantenimiento); el
    soporte de 15.x termina el **21-oct-2026**, así que subir a Next 16 es tarea
@@ -204,6 +214,19 @@ Pendiente de verdad:
    15.5 ya tocó la capa de auth (arreglo del bypass por segment-prefetch), por eso
    no se encadena otro cambio de auth sin probar el login en navegador entre uno
    y otro.
+6. **Los créditos los manda el cliente.** `guardarHistorial` y
+   `guardarHistorialImportado` aceptan `creditos` y `fundamental` del cliente
+   (validados 0-12) en vez de releerlos siempre del `MateriaPlan`. Hoy el impacto
+   es **solo auto-infligido**: un estudiante puede inflar su propio índice y no
+   afecta a nadie más. **Hay que arreglarlo ANTES del motor de estadísticas por
+   profesor**: en cuanto esos `Curso` alimenten agregados compartidos, un dato
+   inventado deja de ser problema de uno solo. La ruta con `materiaPlanId` ya
+   relee del plan; falta forzarlo en la de `materiaId` suelto.
+7. **CSP en Report-Only.** `next.config.ts` sirve la CSP como
+   `Content-Security-Policy-Report-Only`: reporta en consola sin bloquear. Cuando
+   la consola quede limpia navegando toda la app, pasarla a obligatoria. Quitar
+   `'unsafe-inline'` de `script-src` exige nonces y por tanto `middleware.ts`
+   (ver deuda #2 sobre el runtime edge).
 
 ## Próximos pasos, en orden
 
