@@ -192,6 +192,12 @@ export async function buscarMateriaParaImportar(query: string, planId: string): 
   const q = query.trim().slice(0, 80);
   if (q.length < 2) return [];
 
+  // El plan debe ser de la universidad del estudiante, igual que en
+  // procesarHistorialPdf y reemparejarConPlan. Era la única de las tres que no lo
+  // comprobaba: los pénsums son catálogo público y hoy solo hay una universidad,
+  // pero la comprobación no debe depender de eso.
+  if (!(await planEsDeUniversidad(planId, perfil.universidadId))) return [];
+
   const planRefs = await refsDelPlan(planId);
   const enPlan = new Map(planRefs.map((r) => [r.materiaId, r]));
 
