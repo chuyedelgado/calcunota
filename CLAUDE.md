@@ -318,6 +318,35 @@ Lo que queda antes de la beta (fuera del código):
   en modo prueba): sin esto solo el dueño del proyecto puede iniciar sesión.
 - **Reclutar la beta** y abrir el grupo de WhatsApp.
 
+## Migraciones: producción no se actualiza sola
+
+**No hay ningún paso automático que aplique migraciones.** `build` es `next build`
+y `postinstall` es `prisma generate`; ninguno toca el esquema. `migrate dev` solo
+alcanza la base del `.env` local, que es la **rama de desarrollo**. Producción es
+otra base y solo cambia si alguien corre `migrate deploy` contra ella a mano.
+
+Así se quedó fuera `20260804042614_limite_peticiones`: se creó con `migrate dev`
+(desarrollo), se commiteó, se desplegó el código… y la tabla nunca existió en
+producción. Como `lib/limite.ts` **falla abierto**, el limitador no protestó: dejó
+pasar todas las peticiones en silencio. Un fallo silencioso en la única defensa
+contra abuso.
+
+**Ritual obligatorio al commitear una migración:**
+
+```bash
+npm run db:estado      -- --url "<cadena de producción>"   # ¿qué falta allá?
+npm run db:desplegar   -- --url "<cadena de producción>"   # aplicarla
+npm run db:estado      -- --url "<cadena de producción>"   # confirmar
+```
+
+La cadena de producción **nunca** va al `.env` versionado ni al historial: se pasa
+en el momento y se borra. Ver `MIGRACION.md` para el detalle de qué cadena usar
+(directa para migraciones, agrupada para la app).
+
+Sigue pendiente la decisión de si el build debe correr `migrate deploy` solo tras
+la migración a DigitalOcean (recomendación: **no**; un despliegue fallido dejaría
+la base a medio migrar).
+
 ## Comandos
 
 ```bash
@@ -327,6 +356,8 @@ npx prisma generate
 npx prisma db seed
 npx tsx prisma/verificar.ts
 npx prisma studio
+npm run db:estado        # migraciones aplicadas vs las del repo
+npm run db:desplegar     # aplica las pendientes (producción: pasar --url)
 ```
 
 No hay script `test` todavía (ver deuda #1).
