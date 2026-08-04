@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { CalendarDays, GraduationCap, Home, LogOut } from "lucide-react";
+import { CalendarDays, GraduationCap, Home, LogOut, UserRound } from "lucide-react";
 import { cerrarSesion, iniciarSesion } from "@/app/(root)/nav-actions";
 
 export type UsuarioNav = { nombre: string | null; imagen: string | null };
@@ -85,6 +85,15 @@ export default function Navbar({ usuario }: { usuario: UsuarioNav | null }) {
                       {usuario.nombre && (
                         <p className="text-16-medium font-semibold px-1 pb-2 truncate">{usuario.nombre}</p>
                       )}
+                      {/* Única entrada a /perfil desde la interfaz: sin esto la
+                          pantalla solo se alcanza escribiendo la URL. */}
+                      <Link
+                        href="/perfil"
+                        onClick={() => setMenuAbierto(false)}
+                        className="w-full flex items-center gap-2 text-16-medium py-2 px-2 rounded-lg hover:bg-primary-100 hover:!text-primary-ink transition-colors"
+                      >
+                        <UserRound size={18} /> Mi perfil
+                      </Link>
                       <form action={cerrarSesion}>
                         <button
                           type="submit"
