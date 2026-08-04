@@ -31,6 +31,10 @@ export type MateriaArmar = {
   yaCursada: boolean;
   /** Letra del último intento cerrado (para explicar el efecto de repetir). */
   ultimaLetra: Letra | null;
+  /** Es de un grupo del plan anterior a donde el estudiante está de verdad. */
+  rezagada: boolean;
+  /** Códigos de materias del plan que esta materia bloquea por prerequisito. */
+  bloquea: string[];
 };
 
 // Nota que se asume para mostrar el mejor caso al repetir. Se redacta como
@@ -39,6 +43,7 @@ const NOTA_MEJOR_CASO = 95;
 
 export default function ArmarSemestre({
   sugeridas,
+  rezagadas,
   otras,
   historial,
   profesores,
@@ -48,6 +53,7 @@ export default function ArmarSemestre({
   electivas,
 }: {
   sugeridas: MateriaArmar[];
+  rezagadas: MateriaArmar[];
   otras: MateriaArmar[];
   historial: CursoIndice[];
   profesores: string[];
@@ -96,6 +102,10 @@ export default function ArmarSemestre({
   // Buscador: incluye repeticiones (aprobadas/en curso), agrupado por posición
   // del plan. Al escribir, se aplana por relevancia con buscar().
   const q = query.trim();
+  // Una rezagada agregada pasa a la lista de arriba: deja de ofrecerse aquí.
+  const rezagadasPendientes = rezagadas.filter(
+    (m) => !agregadas.some((a) => a.materiaPlanId === m.materiaPlanId),
+  );
   const disponiblesBusqueda = otras.filter((m) => !agregadas.some((a) => a.materiaPlanId === m.materiaPlanId));
   const resultados = q.length >= 2 ? buscar(disponiblesBusqueda, q, (m) => `${m.codigo} ${m.nombre}`).slice(0, 8) : [];
   const grupos = useMemo(() => agrupar(disponiblesBusqueda), [disponiblesBusqueda]);
@@ -161,6 +171,58 @@ export default function ArmarSemestre({
           </p>
         )}
       </div>
+
+      {/* Rezagadas que nunca cursó: fuera del bloque, pero a la vista. Van sin
+          marcar: el estudiante decide si las mete. Las que bloquean a otras se
+          anuncian por lo que bloquean, no como una pendiente más. */}
+      {rezagadasPendientes.length > 0 && (
+        <div
+          className={`tarjeta p-4 ${
+            rezagadasPendientes.some((m) => m.bloquea.length > 0)
+              ? "bg-ambar-suave border border-ambar-fuerte/30"
+              : "bg-crema"
+          }`}
+        >
+          <p className="text-16-medium font-semibold text-tinta mb-1">
+            {rezagadasPendientes.length === 1
+              ? "Te falta una materia de años anteriores"
+              : `Te faltan ${rezagadasPendientes.length} materias de años anteriores`}
+          </p>
+          <p className="text-14-normal !text-black-300 mb-3">
+            No van en la sugerencia porque no te tocan este semestre, pero siguen pendientes.
+          </p>
+          <div className="rounded-lg border border-hairline divide-y divide-hairline bg-superficie">
+            {rezagadasPendientes.map((m) => (
+              <div key={m.materiaPlanId} className="px-3 py-2.5 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-16-medium text-tinta">
+                    {m.codigo} · {m.nombre}
+                  </p>
+                  <p className="text-14-normal !text-black-300">
+                    {m.creditos} cr.
+                    {m.anioSugerido != null ? ` · Año ${m.anioSugerido}` : ""}
+                    {m.periodoSugerido ? ` · ${nombreTipoPeriodo(m.periodoSugerido)}` : ""}
+                  </p>
+                  {m.bloquea.length > 0 && (
+                    <p className="text-14-normal !text-ambar-fuerte font-semibold mt-1">
+                      ⚠ Te está bloqueando {m.bloquea.length}{" "}
+                      {m.bloquea.length === 1 ? "materia" : "materias"} del plan: {m.bloquea.slice(0, 4).join(", ")}
+                      {m.bloquea.length > 4 ? "…" : ""}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => agregar(m)}
+                  className="shrink-0 border-2 border-borde bg-white !text-tinta rounded-xl !text-[14px] px-3 py-2 min-h-[44px]"
+                >
+                  Agregar
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Agregar otras: repeticiones, adelantos. Agrupadas como el selector. */}
       <div className="tarjeta p-4">
@@ -261,6 +323,16 @@ function MateriaCard({
           {m.creditos} cr.{m.fundamental ? " · fundamental" : ""}
           {!esCalificable(m.creditos) ? " · sin nota" : ""}
         </p>
+
+        {m.rezagada && (
+          <p className="text-14-normal !text-ambar-fuerte font-semibold mt-1">
+            ⏳ Te quedó pendiente
+            {m.anioSugerido != null ? ` de Año ${m.anioSugerido}` : ""}
+            {m.bloquea.length > 0
+              ? ` · bloquea ${m.bloquea.length} ${m.bloquea.length === 1 ? "materia" : "materias"}`
+              : ""}
+          </p>
+        )}
 
         {m.yaCursada && (
           <p className="text-14-normal !text-primary-ink mt-1">

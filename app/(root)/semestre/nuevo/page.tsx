@@ -111,6 +111,28 @@ export default async function NuevoSemestrePage({
   const estadoDe = (materiaId: string): MateriaArmar["estado"] =>
     aprobadas.has(materiaId) ? "aprobada" : enCurso.has(materiaId) ? "en_curso" : "pendiente";
 
+  // Materias que el estudiante ya intentó alguna vez (cualquier estado). Sirve
+  // para distinguir una rezagada que reprobó —urgente, va en el bloque— de una
+  // que nunca cursó, que va aparte.
+  const intentadas = new Set(cursos.map((c) => c.materiaId));
+
+  // Grupo curricular (año, periodo) de una materia del plan. `null` en las 18
+  // materias de la base que no tienen año ni periodo asignado.
+  const grupoDe = (mp: (typeof pensum)[number]): number | null =>
+    mp.anio == null || mp.periodo == null ? null : mp.anio * 10 + ORDEN_PERIODO[mp.periodo as TipoPeriodo];
+
+  // Cuántas materias del plan quedan bloqueadas por una materia sin aprobar:
+  // las que la tienen como prerequisito directo y todavía no están aprobadas.
+  const bloqueadasPor = (materiaId: string): string[] =>
+    pensum
+      .filter(
+        (mp) =>
+          !aprobadas.has(mp.materiaId) &&
+          mp.materiaId !== materiaId &&
+          mp.prerequisitos.some((p) => p.materiaRequeridaId === materiaId),
+      )
+      .map((mp) => mp.materia.codigo);
+
   const aMateria = (mp: (typeof pensum)[number]): MateriaArmar => ({
     materiaPlanId: mp.id,
     materiaId: mp.materiaId,
@@ -126,6 +148,8 @@ export default async function NuevoSemestrePage({
       .map((p) => p.materiaRequerida.codigo),
     yaCursada: cerrados.some((c) => c.materiaId === mp.materiaId),
     ultimaLetra: ultimaLetra.get(mp.materiaId) ?? null,
+    rezagada: false,
+    bloquea: [],
   });
 
   // Candidatas al bloque: no aprobadas, no en curso, no ya en este periodo, y con
@@ -135,6 +159,10 @@ export default async function NuevoSemestrePage({
     (mp.anio ?? 99) * 100 + (mp.periodo ? ORDEN_PERIODO[mp.periodo as TipoPeriodo] : 9) * 10 + (mp.orden ?? 0);
 
   let bloque: typeof pensum;
+  // Materias de grupos anteriores a la frontera: las que ya intentó entran al
+  // bloque, las que nunca cursó se muestran aparte.
+  const rezagadasIntentadas: typeof pensum = [];
+  const rezagadasNuevas: typeof pensum = [];
   if (aprobadas.size === 0) {
     // Sin materias aprobadas no hay avance con qué medir prerequisitos: filtrar
     // por prereqs cumplidos solo dejaría las materias sin prereqs, dispersas por
@@ -169,28 +197,47 @@ export default async function NuevoSemestrePage({
       )
       .sort((a, b) => posicion(a) - posicion(b));
 
-    // El bloque sigue la composición REAL del semestre del plan, no un rango
-    // fijo de créditos: se toma el grupo (año, periodo) más temprano que todavía
-    // tenga materias cursables, y se sugiere ENTERO. Un plan que pone 6 materias
-    // y 23 créditos en un semestre debe sugerir esas 6.
+    // FRONTERA: el grupo (año, periodo) más avanzado donde el estudiante ya tiene
+    // algo aprobado o en curso. Es dónde está de verdad, derivado de sus datos y
+    // sin números mágicos.
     //
-    // Antes se acumulaba de forma codiciosa hasta 18 créditos y se cortaba, así
-    // que un semestre de 6 materias se quedaba en 5: al llegar a 19 el bucle
-    // rompía y la última quedaba fuera sin explicación.
+    // Sin frontera el bloque lo decidía el grupo cursable MÁS TEMPRANO, y un solo
+    // hueco viejo lo secuestraba: un estudiante de año 3 con un Pre-cálculo de
+    // año 1 sin cursar recibía "tu semestre: 1 materia de 0 créditos".
+    let frontera = -1;
+    for (const mp of pensum) {
+      if (!aprobadas.has(mp.materiaId) && !enCurso.has(mp.materiaId)) continue;
+      const g = grupoDe(mp);
+      if (g != null && g > frontera) frontera = g;
+    }
+
+    // El bloque sigue la composición REAL del semestre del plan, no un rango fijo
+    // de créditos: el grupo más temprano DESDE LA FRONTERA que todavía tenga
+    // materias cursables, sugerido ENTERO. Un plan que pone 6 materias y 23
+    // créditos en un semestre debe sugerir esas 6.
     const porGrupo = new Map<number, typeof pensum>();
     const sueltas: typeof pensum = [];
     for (const mp of candidatas) {
-      if (mp.anio == null || mp.periodo == null) {
+      const g = grupoDe(mp);
+      if (g == null) {
         sueltas.push(mp);
         continue;
       }
-      const key = mp.anio * 10 + ORDEN_PERIODO[mp.periodo as TipoPeriodo];
-      const arr = porGrupo.get(key);
+      if (g < frontera) {
+        // Rezagada. Si ya la intentó y no la aprobó, repetirla es lo más urgente
+        // que puede hacer: entra al bloque marcada. Si nunca la cursó, se queda
+        // fuera y se avisa aparte — meterla sin avisar arma semestres imposibles.
+        if (intentadas.has(mp.materiaId)) rezagadasIntentadas.push(mp);
+        else rezagadasNuevas.push(mp);
+        continue;
+      }
+      const arr = porGrupo.get(g);
       if (arr) arr.push(mp);
-      else porGrupo.set(key, [mp]);
+      else porGrupo.set(g, [mp]);
     }
     const claves = [...porGrupo.keys()].sort((a, b) => a - b);
-    bloque = claves.length > 0 ? porGrupo.get(claves[0])! : sueltas.slice(0, MAX_SUELTAS);
+    const base = claves.length > 0 ? porGrupo.get(claves[0])! : sueltas.slice(0, MAX_SUELTAS);
+    bloque = [...rezagadasIntentadas, ...base];
   }
 
   // Catálogo de profesores de la universidad, para el combobox de cada materia.
@@ -203,7 +250,18 @@ export default async function NuevoSemestrePage({
   ).map((p) => p.nombre);
 
   const bloqueIds = new Set(bloque.map((mp) => mp.id));
-  const sugeridas = bloque.map(aMateria);
+  const idsRezagadasIntentadas = new Set(rezagadasIntentadas.map((mp) => mp.id));
+  const sugeridas = bloque.map((mp) => {
+    const rezagada = idsRezagadasIntentadas.has(mp.id);
+    return { ...aMateria(mp), rezagada, bloquea: rezagada ? bloqueadasPor(mp.materiaId) : [] };
+  });
+
+  // Rezagadas que nunca cursó: fuera del bloque, pero visibles. Se ordenan por
+  // cuántas materias del plan están bloqueando, porque una que corta el avance
+  // no es una pendiente suelta: es la que hay que resolver primero.
+  const rezagadas = rezagadasNuevas
+    .map((mp) => ({ ...aMateria(mp), rezagada: true, bloquea: bloqueadasPor(mp.materiaId) }))
+    .sort((a, b) => b.bloquea.length - a.bloquea.length);
   // Buscables: el resto del plan que no está ya en este periodo, incluidas las
   // aprobadas/en curso (para poder repetir).
   const otras = pensum.filter((mp) => !bloqueIds.has(mp.id) && !enPeriodo.has(mp.materiaId)).map(aMateria);
@@ -239,6 +297,7 @@ export default async function NuevoSemestrePage({
       </p>
       <ArmarSemestre
         sugeridas={sugeridas}
+        rezagadas={rezagadas}
         otras={otras}
         historial={historial}
         profesores={profesores}
