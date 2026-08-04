@@ -14,7 +14,7 @@ import {
 } from "@/lib/calculos";
 import { buscar } from "@/lib/texto";
 import { parsearHistorial, type CodigoNota, type FilaHistorial } from "@/lib/importarHistorial";
-import { extraerTextoHistorial } from "@/lib/importarHistorialPdf";
+import { ErrorPdf, extraerTextoHistorial, type MotivoFalloPdf } from "@/lib/importarHistorialPdf";
 import { emparejarHistorial, type Emparejamiento, type MateriaRef } from "@/lib/emparejarHistorial";
 import { creditosFrecuentes, materiasDeUniversidad } from "@/lib/catalogo";
 
@@ -119,8 +119,23 @@ export async function procesarHistorialPdf(formData: FormData): Promise<Revision
   try {
     const datos = new Uint8Array(await archivo.arrayBuffer());
     texto = await extraerTextoHistorial(datos);
-  } catch {
-    return { ok: false, error: "No se pudo leer el PDF. ¿Es el Historial de Notas del portal?", ...vacio };
+  } catch (e) {
+    // Un PDF protegido con contraseña NO es lo mismo que uno corrupto: el
+    // estudiante puede resolverlo, así que se le dice exactamente qué hacer.
+    const motivo = e instanceof ErrorPdf ? e.motivo : "desconocido";
+    const mensaje: Record<MotivoFalloPdf, string> = {
+      cifrado:
+        "Ese PDF está protegido con contraseña. Vuelve a guardarlo sin protección: " +
+        "ábrelo en el portal de matrícula y usa Imprimir → Guardar como PDF.",
+      corrupto:
+        "El archivo no se pudo leer: parece dañado o no es un PDF. " +
+        "Descárgalo otra vez desde el portal de matrícula.",
+      tiempo:
+        "El PDF tardó demasiado en procesarse. Asegúrate de subir solo el Historial " +
+        "de Notas, no un documento con muchas páginas.",
+      desconocido: "No se pudo leer el PDF. ¿Es el Historial de Notas del portal?",
+    };
+    return { ok: false, error: mensaje[motivo], ...vacio };
   }
 
   const { filas, periodosDetectados, lineasSinReconocer } = parsearHistorial(texto);

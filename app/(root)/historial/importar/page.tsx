@@ -5,6 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { ordenarPlanes, type PlanOpcion } from "@/lib/planes";
 import ImportarHistorial from "./ImportarHistorial";
 
+/**
+ * Corte duro de la plataforma para las acciones de esta ruta, incluida la
+ * extracción del PDF. Va por encima del tiempo máximo propio de la extracción
+ * (10 s, ver lib/importarHistorialPdf.ts) para que gane el mensaje explicativo y
+ * el estudiante no reciba un error genérico de pasarela. Es el único freno real
+ * ante trabajo síncrono de pdf.js que una promesa no puede interrumpir.
+ */
+export const maxDuration = 30;
+
 export default async function ImportarHistorialPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
