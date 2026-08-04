@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { calcularIndiceDesdeCursos } from "@/lib/indice";
-import type { Letra, TipoPeriodo } from "@/lib/calculos";
+import { calcularAvance } from "@/lib/avance";
+import { esMarcadorDeElectiva, type Letra, type TipoPeriodo } from "@/lib/calculos";
 import { cerrarSesion } from "../nav-actions";
 import type { FacultadArbol } from "../onboarding/OnboardingForm";
 import ContextoAcademicoForm from "./ContextoAcademicoForm";
@@ -97,24 +98,18 @@ export default async function PerfilPage() {
     },
   });
 
-  // Créditos aprobados para el "avance", con el MISMO criterio que /carrera:
-  // una materia cuenta una sola vez, por su mejor estado (aprobada > en curso >
-  // reprobada). Así el antes/después de cambiar de plan coincide con lo que el
-  // estudiante ve en su carrera.
-  type EstadoMat = "aprobada" | "en_curso" | "reprobada";
-  const rank = (e: EstadoMat) => (e === "aprobada" ? 3 : e === "en_curso" ? 2 : 1);
-  const mejorPorMateria = new Map<string, { estado: EstadoMat; creditos: number }>();
-  for (const c of cursos) {
-    const actual: EstadoMat =
-      c.estado === "APROBADO" ? "aprobada" : c.estado === "EN_CURSO" ? "en_curso" : "reprobada";
-    const prev = mejorPorMateria.get(c.materiaId);
-    if (!prev || rank(actual) > rank(prev.estado)) {
-      mejorPorMateria.set(c.materiaId, { estado: actual, creditos: c.creditos });
-    }
-  }
-  const creditosAprobados = [...mejorPorMateria.values()]
-    .filter((m) => m.estado === "aprobada")
-    .reduce((a, m) => a + m.creditos, 0);
+  // Créditos aprobados para el "avance", con el MISMO criterio que /carrera: se
+  // cuentan los REQUISITOS DEL PLAN cumplidos (con sus créditos del plan), no los
+  // cursos. Ver lib/avance.ts: contar cursos hacía que una convalidación sumara
+  // dos veces. Se comparte el helper para que las dos pantallas no diverjan.
+  const materiasDelPlan = await prisma.materiaPlan.findMany({
+    where: { planId: perfil.planId },
+    select: { materiaId: true, creditos: true, materia: { select: { codigo: true } } },
+  });
+  const requeridas = materiasDelPlan
+    .filter((mp) => !esMarcadorDeElectiva(mp.materia.codigo))
+    .map((mp) => ({ materiaId: mp.materiaId, creditos: mp.creditos }));
+  const { creditos: creditosAprobados } = calcularAvance(requeridas, cursos);
 
   const acumulado = calcularIndiceDesdeCursos(
     cursos.map((c) => ({

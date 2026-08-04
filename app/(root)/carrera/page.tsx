@@ -16,6 +16,7 @@ import {
   type TipoPeriodo,
 } from "@/lib/calculos";
 import { calcularIndiceDesdeCursos, type CursoParaIndice } from "@/lib/indice";
+import { calcularAvance } from "@/lib/avance";
 import { proyectarObjetivoCarrera, referenciaLetra } from "@/lib/proyeccionCarrera";
 import Trayectoria, { type PeriodoTrayectoria } from "./Trayectoria";
 
@@ -139,7 +140,10 @@ export default async function CarreraPage() {
   const aprobadas = [...estadoMateria.values()].filter((m) => m.estado === "aprobada");
   const reprobadas = [...estadoMateria.values()].filter((m) => m.estado === "reprobada");
   const enCurso = [...estadoMateria.values()].filter((m) => m.estado === "en_curso");
-  const creditosAprobados = aprobadas.reduce((a, m) => a + m.creditos, 0);
+  // El avance cuenta REQUISITOS DEL PLAN cumplidos, no cursos: una convalidación
+  // es una obligación cumplida una sola vez, aunque haya dos filas (la materia
+  // original que se cursó fuera del pénsum y la fila W del plan). Ver lib/avance.ts.
+  const { creditos: creditosAprobados } = calcularAvance(requeridas, cursos);
   // Pendientes: materias requeridas del pénsum que no se han cursado. Los cupos
   // de electiva (marcadores) no se listan como materia pendiente.
   const pendientes = requeridas.filter((mp) => !estadoMateria.has(mp.materiaId));

@@ -97,6 +97,32 @@ Reglas que no son obvias y están implementadas en `lib/calculos.ts`:
    "MATERIAS ELECTIVAS" y son huecos del plan. No deben ofrecerse como curso.
    Usar `esMarcadorDeElectiva()`.
 
+## Índice y avance son dos cuentas distintas (no unificar)
+
+Se parecen, se miden en créditos y a veces dan el mismo número. **No son lo
+mismo y no comparten fórmula.**
+
+| | Qué cuenta | Créditos de dónde | Dónde vive |
+|---|---|---|---|
+| **Índice** | cursos **con nota**, estén o no en el plan | del curso | `lib/calculos.ts` |
+| **Avance** | **requisitos del plan** satisfechos | del **plan** | `lib/avance.ts` |
+
+Una **convalidación** es lo que las separa: deja dos filas —la materia original
+que el estudiante cursó de verdad fuera del pénsum (con nota) y la fila del plan
+marcada como convalidada (W)—, pero es **una sola obligación cumplida**. Al
+índice entra la original, porque tiene nota; al avance entra la del plan, una vez.
+
+Ese era el fallo que arrastraba `/carrera` y `/perfil` hasta agosto de 2026:
+sumaban los **cursos** en estado `APROBADO`, así que cada convalidación contaba
+doble. Un expediente real daba **129 de 203** cuando lo correcto era **120**.
+
+**Cuando los dos números coinciden, es casualidad.** En ese mismo expediente el
+índice y el avance dan los dos 120, pero solo porque los créditos de cada
+materia convalidada resultan iguales en el catálogo y en el plan. Con que una
+sola difiera —ya pasó: Interacción Humano-Computador vale 3 en un plan y 4 en
+otro— se separan y **ambos siguen siendo correctos**. No "simplificar" juntando
+las dos cuentas porque den lo mismo: se rompen las dos a la vez.
+
 ## Nota dentro de una materia
 
 Una materia se divide en **secciones** (Parciales, Talleres, Final), cada una con
