@@ -399,3 +399,24 @@ model Nota {
   @@unique([seccionId, orden])
   @@index([seccionId])
 }
+
+/// Contador para el límite de peticiones. Ventana fija por bucket: la marca de
+/// tiempo de inicio de ventana forma parte de la clave única, así que un upsert
+/// atómico incrementa o crea sin condiciones de carrera.
+///
+/// No es ventana deslizante: es más simple y suficiente para frenar abuso. El
+/// costo es que se permiten hasta 2× el límite en el cruce de dos ventanas.
+///
+/// `clave` es el id de usuario o la IP según la acción.
+model LimitePeticiones {
+  id      String   @id @default(cuid())
+  clave   String
+  accion  String
+  ventana DateTime
+  conteo  Int      @default(1)
+
+  creado DateTime @default(now())
+
+  @@unique([clave, accion, ventana])
+  @@index([ventana])
+}

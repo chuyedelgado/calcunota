@@ -2,6 +2,7 @@
 
 import { buscar } from "@/lib/texto";
 import { materiasDeUniversidadPorNombre, profesoresDeUniversidadPorNombre } from "@/lib/catalogo";
+import { consumirLimite, ipDeLaPeticion } from "@/lib/limite";
 
 // Búsquedas públicas del catálogo (solo lectura, sin sesión). Para los combobox
 // "elegir o escribir" del asistente anónimo.
@@ -25,6 +26,10 @@ export async function buscarMateriasPublico(query: string, universidad?: string)
   // Sin universidad no se puede filtrar el catálogo: el asistente deshabilita el
   // campo, pero por si acaso aquí tampoco se ofrece nada que confunda.
   if (q.length < 2 || !uni) return [];
+  // Sin sesión, la clave es la IP: antiabuso oportunista (ver lib/limite.ts).
+  // La lista vacía es la degradación natural de un combobox de sugerencias.
+  const { permitido } = await consumirLimite("busquedaPublica", await ipDeLaPeticion());
+  if (!permitido) return [];
   const materias = await materiasDeUniversidadPorNombre(uni);
   const opciones = materias.map((m) => `${m.codigo} · ${m.nombre}`);
   return buscar(opciones, q, (o) => o).slice(0, MAX_SUGERENCIAS);
@@ -34,6 +39,8 @@ export async function buscarProfesoresPublico(query: string, universidad?: strin
   const q = query.trim().slice(0, MAX_CONSULTA);
   const uni = universidad?.trim().slice(0, MAX_CONSULTA);
   if (q.length < 2 || !uni) return [];
+  const { permitido } = await consumirLimite("busquedaPublica", await ipDeLaPeticion());
+  if (!permitido) return [];
   const profes = await profesoresDeUniversidadPorNombre(uni);
   return buscar(profes, q, (n) => n).slice(0, MAX_SUGERENCIAS);
 }

@@ -222,7 +222,12 @@ Pendiente de verdad:
    profesor**: en cuanto esos `Curso` alimenten agregados compartidos, un dato
    inventado deja de ser problema de uno solo. La ruta con `materiaPlanId` ya
    relee del plan; falta forzarlo en la de `materiaId` suelto.
-7. **CSP en Report-Only.** `next.config.ts` sirve la CSP como
+7. **Menor y cosmética: `nombreProfesor` y los apóstrofos.** No recapitaliza tras
+   apóstrofo ni guion, así que `"Juan D'Angelo"` queda `"Juan D'angelo"` y
+   `"Sáenz-Rodríguez"` queda `"Sáenz-rodríguez"`. Es preexistente y no afecta a
+   búsquedas ni a cálculos (`normalizar()` iguala igual). Vive en `lib/texto.ts`,
+   que es de solo lectura.
+8. **CSP en Report-Only.** `next.config.ts` sirve la CSP como
    `Content-Security-Policy-Report-Only`: reporta en consola sin bloquear. Cuando
    la consola quede limpia navegando toda la app, pasarla a obligatoria. Quitar
    `'unsafe-inline'` de `script-src` exige nonces y por tanto `middleware.ts`

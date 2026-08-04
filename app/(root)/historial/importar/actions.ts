@@ -17,6 +17,7 @@ import { parsearHistorial, type CodigoNota, type FilaHistorial } from "@/lib/imp
 import { ErrorPdf, extraerTextoHistorial, type MotivoFalloPdf } from "@/lib/importarHistorialPdf";
 import { emparejarHistorial, type Emparejamiento, type MateriaRef } from "@/lib/emparejarHistorial";
 import { creditosFrecuentes, materiasDeUniversidad } from "@/lib/catalogo";
+import { consumirLimite, mensajeLimite } from "@/lib/limite";
 
 const LIMITE_BYTES = 5 * 1024 * 1024; // 5 MB
 const TIPOS_VALIDOS = new Set<TipoPeriodo>(["PRIMER_SEMESTRE", "SEGUNDO_SEMESTRE", "VERANO"]);
@@ -113,6 +114,13 @@ export async function procesarHistorialPdf(formData: FormData): Promise<Revision
 
   if (!(await planEsDeUniversidad(planId, perfil.universidadId))) {
     return { ok: false, error: "Plan no válido.", ...vacio };
+  }
+
+  // Procesar un PDF es lo más caro de la app en CPU. La clave es el perfil, no la
+  // IP: sale de la sesión y no se puede falsificar.
+  const limite = await consumirLimite("importarPdf", perfil.id);
+  if (!limite.permitido) {
+    return { ok: false, error: mensajeLimite(limite.esperaSegundos), ...vacio };
   }
 
   let texto: string;
@@ -269,6 +277,16 @@ export async function guardarHistorialImportado(
   const perfil = await perfilDeSesion();
   if (!perfil) return { ok: false, error: "Sesión no válida.", guardados: 0 };
   if (items.length === 0) return { ok: true, guardados: 0 };
+
+  // "Reemplazar" borra y reescribe el expediente entero: se acota aparte, con un
+  // cupo más estrecho que el de una escritura normal.
+  const limite = await consumirLimite(
+    modo === "reemplazar" ? "reemplazarHistorial" : "escrituraAutenticada",
+    perfil.id,
+  );
+  if (!limite.permitido) {
+    return { ok: false, error: mensajeLimite(limite.esperaSegundos), guardados: 0 };
+  }
 
   const anioActual = new Date().getFullYear();
 
