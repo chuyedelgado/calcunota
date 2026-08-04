@@ -1,10 +1,11 @@
 // Extracción del texto del "Historial de Notas" (PDF del portal de matrícula
-// de la UTP) en el runtime de Node de Vercel.
+// de la UTP) en el runtime de Node.
 //
 // Librería: unpdf (https://github.com/unjs/unpdf).
 //   - Trae un build serverless de pdf.js: JavaScript puro, SIN binarios nativos
 //     ni dependencias de sistema (no necesita `canvas`, ni `sharp`, ni un worker
-//     aparte). Encaja directo en las Serverless/Edge Functions de Vercel.
+//     aparte). Funciona igual en un contenedor de larga vida que en una función
+//     serverless, así que la migración de plataforma no lo toca.
 //   - No requiere configuración especial de Next (no hay que tocar webpack ni
 //     serverExternalPackages). pdfjs-dist, en cambio, obliga a configurar
 //     GlobalWorkerOptions.workerSrc y suele necesitar el build "legacy" +
@@ -79,9 +80,12 @@ async function liberar(pdf: unknown): Promise<void> {
  * Sobre el tiempo máximo: la carrera corta la ESPERA, no el trabajo. pdf.js hace
  * el grueso del análisis en JavaScript síncrono, y una promesa no interrumpe un
  * bucle ocupado. Lo que se consigue es (a) responderle al estudiante enseguida en
- * vez de dejarlo colgado y (b) soltar los recursos del documento. El corte duro
- * de verdad es el límite de tiempo de la plataforma (ver `maxDuration` en la
- * página del importador).
+ * vez de dejarlo colgado y (b) soltar los recursos del documento.
+ *
+ * El corte duro de verdad lo pone la plataforma, y NO todas lo ponen: en Vercel
+ * es `maxDuration` (ver la página del importador); en App Platform, que es un
+ * contenedor de larga vida, no existe ese límite y este tiempo máximo es lo
+ * único que hay. Anotado como deuda en MIGRACION.md.
  */
 export async function extraerTextoHistorial(
   datos: Uint8Array | ArrayBuffer,

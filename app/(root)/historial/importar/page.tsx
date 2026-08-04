@@ -11,6 +11,11 @@ import ImportarHistorial from "./ImportarHistorial";
  * (10 s, ver lib/importarHistorialPdf.ts) para que gane el mensaje explicativo y
  * el estudiante no reciba un error genérico de pasarela. Es el único freno real
  * ante trabajo síncrono de pdf.js que una promesa no puede interrumpir.
+ *
+ * OJO: esto lo entiende VERCEL. App Platform es un contenedor de larga vida y lo
+ * ignora, así que allí este freno no existe y solo queda el tiempo máximo de 10 s
+ * de la extracción. Se mantiene igualmente: es inofensivo donde no aplica y sigue
+ * valiendo si algún día se vuelve a un runtime con límite por función.
  */
 export const maxDuration = 30;
 

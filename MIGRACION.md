@@ -60,28 +60,47 @@ despliegue parece un desastre inexplicable en vez de una variable olvidada.
 - [x] Connection pool en modo *transaction* creado
 - [ ] Repo `chuyedelgado/calcunota` autorizado desde DO (app de GitHub)
 
-## Fase 1 — Cambios de código **[YO]**
+## Fase 1 — Cambios de código **[YO]** ✅
 
 Todos compatibles con Vercel: **no rompen nada mientras las dos plataformas
 corren en paralelo**.
 
-1. **`AUTH_TRUST_HOST`** — pasa de opcional comentada a **requisito** en
-   `.env.example`, documentada como obligatoria fuera de Vercel.
-2. **Build** — decidir entre `prisma migrate deploy && next build` y dejar el
-   `postinstall` con `prisma generate` (ver *Decisión pendiente*).
-3. **`maxDuration = 30`** — se mantiene (inofensivo, sirve si algún día se vuelve
-   a Vercel) con un comentario de que en App Platform no aplica.
-4. **`.env.example`** — reescribir la sección de `DATABASE_URL` para DO:
-   agrupada vs directa, `sslmode=require`.
-5. **Comentarios que dicen "Vercel"** en `lib/importarHistorialPdf.ts` → pasar a
-   "runtime de Node" a secas.
-6. **Health check** — `app/api/salud/route.ts`, trivial y **sin tocar la base**.
-   Si el health check consultara Postgres, un hipo de la base haría que DO
-   reiniciara la app en bucle.
+- [x] 1. **`AUTH_TRUST_HOST`** — de opcional comentada a **requisito** en
+      `.env.example`, con el error reproducible escrito al lado.
+- [x] 2. **Build** → `prisma migrate deploy && next build`. Ver *Migraciones* en
+      CLAUDE.md: esquema automático, datos a mano.
+- [x] 3. **`DIRECT_DATABASE_URL`** (no estaba en el plan original, lo obliga el
+      punto 2). `prisma.config.ts` la usa cuando existe y cae en `DATABASE_URL`
+      si no. **Sin esto el build migraría por el pool y fallaría a ratos.**
+- [x] 4. **`maxDuration = 30`** — se mantiene, con el comentario de que App
+      Platform lo ignora y allí solo queda el tiempo máximo propio de 10 s.
+- [x] 5. **`.env.example`** — sección de base de datos reescrita: agrupada para
+      la app, directa para la CLI, y qué hace falta en local (nada).
+- [x] 6. **Comentarios atados a Vercel** en `lib/importarHistorialPdf.ts` →
+      "runtime de Node".
+- [x] 7. **Health check** — `app/api/salud/route.ts`, trivial y **sin tocar la
+      base**. Si consultara Postgres, un hipo de la base haría que DO reiniciara
+      la app en bucle.
 
-**Verificación antes de que toques ningún panel:** `tsc`, `lint`, `build`, la
-suite de pruebas, y arrancar en local con `AUTH_TRUST_HOST=true` en un puerto no
-estándar para reproducir el escenario de App Platform.
+### Variables de entorno que hay que poner en App Platform
+
+| Variable | Valor | Cifrada |
+|---|---|---|
+| `DATABASE_URL` | cadena **agrupada** (connection pool, modo *transaction*) | sí |
+| `DIRECT_DATABASE_URL` | cadena **directa** — la usa `migrate deploy` en el build | sí |
+| `AUTH_SECRET` | el mismo que hoy (cambiarlo invalida las sesiones) | sí |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | los de Google Cloud Console | sí |
+| `AUTH_TRUST_HOST` | `true` | no |
+
+> `DIRECT_DATABASE_URL` debe estar disponible **en el build**, no solo en
+> ejecución. Si App Platform separa las variables de build y de runtime, hay que
+> marcarla para ambas o el `migrate deploy` del build se quedará sin cadena y
+> caerá en la agrupada.
+
+### Verificación hecha
+
+`tsc`, `lint`, 31 pruebas, `next build`, y arranque en un puerto no estándar con
+`AUTH_TRUST_HOST=true` para reproducir el escenario de App Platform.
 
 ### Lo que NO hay que cambiar (verificado)
 
@@ -302,13 +321,20 @@ esto resuelto.**
 
 ---
 
-## Decisión pendiente antes de la fase 1
+## Decisión tomada: migraciones de esquema automáticas
 
-**¿Migraciones automáticas en el build?** Con
-`prisma migrate deploy && next build`, cada despliegue aplica solo las
-migraciones pendientes: cómodo, pero un despliegue fallido puede dejar la base a
-medio migrar.
+`build: prisma migrate deploy && next build`.
 
-**Recomendación: NO.** Que `migrate deploy` se corra a mano con la cadena
-directa, como hasta ahora. Más pasos, cero sorpresas. Si no se dice lo
-contrario, la fase 1 se hace así.
+La objeción inicial era que un despliegue fallido puede dejar la base a medio
+migrar. La descartó un hecho, no un argumento: el proceso manual **ya falló**.
+`20260804042614_limite_peticiones` nunca llegó a producción, y como el limitador
+falla abierto, no protestó — la única defensa contra abuso llevaba días apagada
+anunciándose como encendida.
+
+Un fallo ruidoso en el despliegue es preferible a una migración que no se aplica
+en silencio. Y `migrate deploy` no resetea ni genera nada: si falla, aborta y la
+versión anterior sigue sirviendo.
+
+Lo que **no** va en el build: las migraciones de **datos** (`seed`,
+`marcar-vigencia`, `fusionar-carreras`, `corregir-nombres`, integración de
+planes). Requieren simulación previa y orden. Detalle en CLAUDE.md.
