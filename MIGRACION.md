@@ -133,10 +133,30 @@ no `serial`), así que **no hay secuencias que resincronizar**.
   llega. Con 3 usuarios reales es despreciable, pero **la copia final se hace
   justo antes del cambio de dominio** y con una segunda pasada de conteos.
 
+### ⚠️ Falta una migración en producción
+
+`20260804042614_limite_peticiones` **no está aplicada en producción**. Solo hay
+tres migraciones en la base y la tabla `LimitePeticiones` no existe:
+
+```
+OK  20260724002646_esquema_inicial
+OK  20260724011234_esquema_inicial
+OK  20260729031021_secciones_anidadas
+!!  20260804042614_limite_peticiones   <- falta
+```
+
+Consecuencia hoy: **el límite de peticiones no está limitando nada**. Como
+`lib/limite.ts` falla abierto por diseño, cada consulta al contador revienta en
+silencio y deja pasar la petición — que es el comportamiento correcto ante una
+base rota, pero significa que la protección no existe todavía.
+
+No es un problema de la migración a DO: `prisma migrate deploy` de la fase 2.5 la
+aplicará en destino junto con las otras tres. **Pero hay que aplicarla también en
+Neon** si la beta arranca antes de migrar.
+
 ### Verificación de la copia
 
-Conteos medidos en Neon el 2 de agosto de 2026 (**volver a medirlos justo antes
-de la copia final**, no fiarse de esta tabla):
+Conteos medidos **en producción** el 4 de agosto de 2026:
 
 | Tabla | Filas |
 |---|---|
@@ -145,15 +165,37 @@ de la copia final**, no fiarse de esta tabla):
 | Materia | 2,019 |
 | PlanEstudio | 113 |
 | Carrera | 62 |
-| **Curso** (datos reales) | **31** |
-| **Nota** (datos reales) | **16** |
-| User / Perfil | 3 / 2 |
+| Facultad | 6 |
+| Universidad / Profesor | 1 / 0 |
+| User / Account | 3 / 3 |
+| **PerfilEstudiante** | **2** |
+| **Periodo** | **8** |
+| **Curso** (datos reales) | **70** |
+| **Seccion / Nota** | **18 / 36** |
+
+> Una tabla anterior de este documento daba Curso=31 y Nota=16. **Esos números
+> eran de la rama de desarrollo**, medidos por error con la `DATABASE_URL` del
+> `.env` local. Con esa referencia, una copia a la que le faltaran 39 cursos, un
+> perfil entero y dos periodos habría pasado la verificación como buena. Medir
+> siempre con la cadena de producción, y **volver a medir justo antes de la copia
+> final**: estas cifras envejecen con cada uso real.
 
 Después de copiar: **(a)** comparación tabla por tabla origen vs destino,
 **(b)** `npx tsx prisma/verificar.ts` apuntando a DO → **0 fallos**, y **(c)** el
-perfil real sigue en Software M-2024 con sus 31 cursos y el índice
-**360/120 = 3.00**. Ese último número es el mejor detector de corrupción que hay:
-si un solo curso se pierde o duplica, cambia.
+expediente de referencia (`jesusdelgadocidmi2016@gmail.com`, Ingeniería de
+Software **M-2024**) sigue dando exactamente:
+
+| Comprobación | Valor esperado |
+|---|---|
+| Índice acumulado | **360 puntos / 120 créditos = 3.00** |
+| Cursos del perfil | **40** (34 aprobados + 6 en curso) |
+| Cursos con resultado | 30 |
+| Periodos | 8 |
+| Avance de carrera | **119 de 203** |
+
+El índice es el mejor detector de corrupción que hay: si un solo curso se pierde
+o se duplica, cambia. **El avance (119) y el índice (120) NO son el mismo número
+y no deben "cuadrarse"** — ver la sección de índice y avance en CLAUDE.md.
 
 ## Fase 3 — Desplegar en paralelo **[TÚ creas, YO configuro y verifico]**
 
