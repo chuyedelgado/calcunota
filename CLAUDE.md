@@ -318,34 +318,58 @@ Lo que queda antes de la beta (fuera del código):
   en modo prueba): sin esto solo el dueño del proyecto puede iniciar sesión.
 - **Reclutar la beta** y abrir el grupo de WhatsApp.
 
-## Migraciones: producción no se actualiza sola
+## Migraciones: de ESQUEMA automáticas, de DATOS a mano
 
-**No hay ningún paso automático que aplique migraciones.** `build` es `next build`
-y `postinstall` es `prisma generate`; ninguno toca el esquema. `migrate dev` solo
-alcanza la base del `.env` local, que es la **rama de desarrollo**. Producción es
-otra base y solo cambia si alguien corre `migrate deploy` contra ella a mano.
+Son dos cosas distintas y **no se tratan igual**.
 
-Así se quedó fuera `20260804042614_limite_peticiones`: se creó con `migrate dev`
-(desarrollo), se commiteó, se desplegó el código… y la tabla nunca existió en
-producción. Como `lib/limite.ts` **falla abierto**, el limitador no protestó: dejó
-pasar todas las peticiones en silencio. Un fallo silencioso en la única defensa
-contra abuso.
+### Esquema → van en el build
 
-**Ritual obligatorio al commitear una migración:**
-
-```bash
-npm run db:estado      -- --url "<cadena de producción>"   # ¿qué falta allá?
-npm run db:desplegar   -- --url "<cadena de producción>"   # aplicarla
-npm run db:estado      -- --url "<cadena de producción>"   # confirmar
+```
+build: prisma migrate deploy && next build
 ```
 
-La cadena de producción **nunca** va al `.env` versionado ni al historial: se pasa
-en el momento y se borra. Ver `MIGRACION.md` para el detalle de qué cadena usar
-(directa para migraciones, agrupada para la app).
+`migrate deploy` **no es** `migrate dev`: solo aplica migraciones que ya existen
+en `prisma/migrations`, nunca genera ni resetea nada. Si una falla, **aborta y el
+despliegue no sale**: la versión anterior sigue sirviendo. Ese es el
+comportamiento buscado.
 
-Sigue pendiente la decisión de si el build debe correr `migrate deploy` solo tras
-la migración a DigitalOcean (recomendación: **no**; un despliegue fallido dejaría
-la base a medio migrar).
+**Por qué automático y no un ritual manual.** Se probó el manual y falló:
+`20260804042614_limite_peticiones` se creó con `migrate dev` (que solo alcanza la
+base del `.env` local, la de **desarrollo**), se commiteó, se desplegó el
+código… y la tabla nunca existió en producción. Como `lib/limite.ts` **falla
+abierto**, el limitador no protestó: dejó pasar todas las peticiones en silencio
+durante días, anunciándose como encendido. Un proceso manual bien documentado
+solo sirve si alguien lo ejecuta **cada vez**; una migración que nunca se aplica
+en silencio es peor que un despliegue que se cae de forma ruidosa.
+
+**`DIRECT_DATABASE_URL` es obligatoria en producción por esto.** En producción
+`DATABASE_URL` es la cadena **agrupada** (pgBouncer en modo transacción) y
+pgBouncer no maneja bien las sentencias preparadas ni los bloqueos de aviso de
+migrate. `prisma.config.ts` usa `DIRECT_DATABASE_URL` cuando existe y cae en
+`DATABASE_URL` si no, así que **en local no hay que configurar nada**.
+
+**Al desplegar una migración, comprobar que el build la aplicó.** En el registro
+de la construcción tiene que aparecer `migrate deploy` con la migración por
+nombre; si dice `No pending migrations to apply` cuando esperabas una, el build
+corrió contra otra base. Confirmar con `npm run db:estado`.
+
+### Datos → siempre a mano, con simulación previa
+
+`prisma/seed.ts`, `marcar-vigencia.ts`, `fusionar-carreras.ts`,
+`corregir-nombres.ts` y la futura integración de planes **no van en el build**.
+Requieren orden, pausas y revisar la simulación (`--aplicar` es opt-in
+justamente para eso). Un build que los ejecutara solo podría fusionar carreras
+con un nombre canónico malo sin que nadie lo mirara.
+
+```bash
+npm run db:estado                          # qué falta, contra la base del .env
+npm run db:desplegar                       # aplica pendientes (raro: lo hace el build)
+DATABASE_URL="<producción>" npm run db:estado   # comprobar otra base
+```
+
+La cadena de producción **nunca** va al `.env` versionado ni al historial: se
+pasa en el momento y se borra. Ver `MIGRACION.md` para qué cadena usar en cada
+caso.
 
 ## Comandos
 

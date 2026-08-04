@@ -10,6 +10,17 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // La CLI de Prisma (migrate, seed, studio) usa la cadena DIRECTA cuando
+    // existe; la app usa siempre `DATABASE_URL` en lib/prisma.ts.
+    //
+    // Importa desde que `migrate deploy` corre dentro del build: en producción
+    // `DATABASE_URL` es la cadena AGRUPADA (pgBouncer en modo transacción), y
+    // pgBouncer no maneja bien las sentencias preparadas ni los bloqueos de
+    // aviso que usa migrate. Sin esta separación, el build fallaría de forma
+    // intermitente y difícil de leer.
+    //
+    // En local no hay `DIRECT_DATABASE_URL` y cae en `DATABASE_URL`, que ya es
+    // directa: no hay que configurar nada para desarrollar.
+    url: process.env["DIRECT_DATABASE_URL"] ?? process.env["DATABASE_URL"],
   },
 });
