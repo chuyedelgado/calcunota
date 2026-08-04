@@ -16,10 +16,11 @@ import {
 import { parseAnioPeriodo, parseTipoPeriodo } from "../periodo";
 import ArmarSemestre, { type MateriaArmar } from "./ArmarSemestre";
 
-// Tamaño del bloque sugerido: el típico de un semestre del plan.
-const OBJETIVO_CREDITOS = 18;
-const MAX_CREDITOS = 22;
-const MAX_MATERIAS = 6;
+// El bloque sugerido sale de la composición REAL del plan, no de un rango fijo de
+// créditos. Este tope solo aplica al caso raro de materias del plan sin año ni
+// periodo asignado (18 en toda la base), donde no hay grupo curricular al que
+// atenerse y hay que cortar por algo.
+const MAX_SUELTAS = 6;
 
 export default async function NuevoSemestrePage({
   searchParams,
@@ -168,15 +169,28 @@ export default async function NuevoSemestrePage({
       )
       .sort((a, b) => posicion(a) - posicion(b));
 
-    bloque = [];
-    let creditos = 0;
+    // El bloque sigue la composición REAL del semestre del plan, no un rango
+    // fijo de créditos: se toma el grupo (año, periodo) más temprano que todavía
+    // tenga materias cursables, y se sugiere ENTERO. Un plan que pone 6 materias
+    // y 23 créditos en un semestre debe sugerir esas 6.
+    //
+    // Antes se acumulaba de forma codiciosa hasta 18 créditos y se cortaba, así
+    // que un semestre de 6 materias se quedaba en 5: al llegar a 19 el bucle
+    // rompía y la última quedaba fuera sin explicación.
+    const porGrupo = new Map<number, typeof pensum>();
+    const sueltas: typeof pensum = [];
     for (const mp of candidatas) {
-      if (bloque.length >= MAX_MATERIAS) break;
-      if (bloque.length > 0 && creditos + mp.creditos > MAX_CREDITOS) break;
-      bloque.push(mp);
-      creditos += mp.creditos;
-      if (creditos >= OBJETIVO_CREDITOS) break;
+      if (mp.anio == null || mp.periodo == null) {
+        sueltas.push(mp);
+        continue;
+      }
+      const key = mp.anio * 10 + ORDEN_PERIODO[mp.periodo as TipoPeriodo];
+      const arr = porGrupo.get(key);
+      if (arr) arr.push(mp);
+      else porGrupo.set(key, [mp]);
     }
+    const claves = [...porGrupo.keys()].sort((a, b) => a - b);
+    bloque = claves.length > 0 ? porGrupo.get(claves[0])! : sueltas.slice(0, MAX_SUELTAS);
   }
 
   const bloqueIds = new Set(bloque.map((mp) => mp.id));
