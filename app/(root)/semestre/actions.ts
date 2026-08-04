@@ -280,12 +280,14 @@ export async function crearSemestre(input: {
   anio: number;
   tipo: TipoPeriodo;
   materiaPlanIds: string[];
+  /** Profesor por materia (materiaPlanId -> nombre). Opcional. */
+  profesores?: Record<string, string>;
 }): Promise<{ ok: boolean; error?: string }> {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
   const perfil = await prisma.perfilEstudiante.findUnique({
     where: { userId: session.user.id },
-    select: { id: true, planId: true },
+    select: { id: true, planId: true, universidadId: true },
   });
   if (!perfil) redirect("/onboarding");
 
@@ -294,6 +296,22 @@ export async function crearSemestre(input: {
     return { ok: false, error: "Año de periodo inválido." };
   }
   if (input.materiaPlanIds.length === 0) return { ok: false, error: "Marca al menos una materia." };
+
+  // Los profesores entran al catálogo COMPARTIDO: se validan TODOS antes de
+  // crear nada, para no dejar el semestre a medio armar por un nombre malo.
+  const profesorIdPorMateria = new Map<string, string>();
+  for (const [mpId, crudo] of Object.entries(input.profesores ?? {})) {
+    const v = validarNombreProfesor(crudo);
+    if (!v.ok) return { ok: false, error: v.error };
+    if (!v.nombre) continue;
+    const prof = await prisma.profesor.upsert({
+      where: { universidadId_nombre: { universidadId: perfil.universidadId, nombre: v.nombre } },
+      create: { nombre: v.nombre, universidadId: perfil.universidadId, verificado: false },
+      update: {},
+      select: { id: true },
+    });
+    profesorIdPorMateria.set(mpId, prof.id);
+  }
 
   const periodo = await prisma.periodo.upsert({
     where: { anio_tipo: { anio: input.anio, tipo: input.tipo } },
@@ -320,6 +338,7 @@ export async function crearSemestre(input: {
           perfilId: perfil.id,
           materiaId: mp.materiaId,
           periodoId: periodo.id,
+          profesorId: profesorIdPorMateria.get(mpId) ?? null,
           creditos: mp.creditos,
           fundamental: mp.fundamental,
           esRepeticion: previos > 0,

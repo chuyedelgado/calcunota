@@ -41,6 +41,7 @@ export default function ArmarSemestre({
   sugeridas,
   otras,
   historial,
+  profesores,
   anio,
   tipo,
   tieneAvance,
@@ -49,6 +50,7 @@ export default function ArmarSemestre({
   sugeridas: MateriaArmar[];
   otras: MateriaArmar[];
   historial: CursoIndice[];
+  profesores: string[];
   anio: number;
   tipo: TipoPeriodo;
   tieneAvance: boolean;
@@ -57,6 +59,9 @@ export default function ArmarSemestre({
   // Precargadas: las sugeridas marcadas. El estudiante retoca, no arma de cero.
   const [seleccion, setSeleccion] = useState<Set<string>>(() => new Set(sugeridas.map((s) => s.materiaPlanId)));
   const [agregadas, setAgregadas] = useState<MateriaArmar[]>([]);
+  // Profesor por materia (materiaPlanId -> nombre). Opcional: se puede dejar en
+  // blanco y completarlo luego desde la ficha de la materia.
+  const [profesorPorMateria, setProfesorPorMateria] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
@@ -104,13 +109,26 @@ export default function ArmarSemestre({
   async function crear() {
     setEnviando(true);
     setError("");
-    const r = await crearSemestre({ anio, tipo, materiaPlanIds: [...seleccion] });
+    // Solo se mandan los profesores de las materias efectivamente marcadas.
+    const profes: Record<string, string> = {};
+    for (const id of seleccion) {
+      const nombre = profesorPorMateria[id]?.trim();
+      if (nombre) profes[id] = nombre;
+    }
+    const r = await crearSemestre({ anio, tipo, materiaPlanIds: [...seleccion], profesores: profes });
     setEnviando(false);
     if (r && !r.ok) setError(r.error ?? "No se pudo crear el semestre.");
   }
 
   return (
     <div className="space-y-5">
+      {/* Una sola lista de sugerencias para todos los campos de profesor. */}
+      <datalist id="lista-profesores-armar">
+        {profesores.map((p) => (
+          <option key={p} value={p} />
+        ))}
+      </datalist>
+
       {!tieneAvance && (
         <div className="tarjeta bg-primary-100 border border-primary/30 p-4">
           <p className="text-14-normal text-tinta">
@@ -131,6 +149,10 @@ export default function ArmarSemestre({
             marcada={seleccion.has(m.materiaPlanId)}
             onToggle={() => toggle(m.materiaPlanId)}
             ganancia={gananciaRepetir(m)}
+            profesor={profesorPorMateria[m.materiaPlanId] ?? ""}
+            onProfesor={(v) =>
+              setProfesorPorMateria((prev) => ({ ...prev, [m.materiaPlanId]: v }))
+            }
           />
         ))}
         {lista.length === 0 && (
@@ -209,16 +231,29 @@ function MateriaCard({
   marcada,
   onToggle,
   ganancia,
+  profesor,
+  onProfesor,
 }: {
   m: MateriaArmar;
   marcada: boolean;
   onToggle: () => void;
   ganancia: number | null;
+  profesor: string;
+  onProfesor: (valor: string) => void;
 }) {
   return (
-    <label className="tarjeta p-4 flex items-start gap-3 cursor-pointer">
-      <input type="checkbox" className="mt-1 accent-primary w-4 h-4" checked={marcada} onChange={onToggle} />
-      <div className="min-w-0">
+    // No es <label> envolviendo todo: dentro hay un campo de texto, y un clic en
+    // él no debe alternar la casilla de la materia.
+    <div className="tarjeta p-4">
+      <div className="flex items-start gap-3">
+      <input
+        type="checkbox"
+        id={`sel-${m.materiaPlanId}`}
+        className="mt-1 accent-primary w-4 h-4 shrink-0"
+        checked={marcada}
+        onChange={onToggle}
+      />
+      <label htmlFor={`sel-${m.materiaPlanId}`} className="min-w-0 cursor-pointer">
         <p className="text-16-medium font-semibold">
           {m.codigo} · {m.nombre}
         </p>
@@ -254,8 +289,33 @@ function MateriaCard({
             en paralelo o los convalidaste.
           </p>
         )}
+        </label>
       </div>
-    </label>
+
+      {/* Profesor por materia: opcional, pero es el dato que alimentará las
+          estadísticas, así que se pide en el momento de armar el semestre y no
+          materia por materia después. Solo si la materia está marcada. */}
+      {marcada && (
+        <div className="mt-3 pl-7">
+          <label
+            htmlFor={`prof-${m.materiaPlanId}`}
+            className="block text-14-normal font-semibold text-tinta mb-1"
+          >
+            Profesor <span className="!text-black-300 font-normal">(opcional)</span>
+          </label>
+          <input
+            id={`prof-${m.materiaPlanId}`}
+            list="lista-profesores-armar"
+            value={profesor}
+            onChange={(e) => onProfesor(e.target.value)}
+            placeholder="Escribe o elige un profesor"
+            autoComplete="off"
+            maxLength={60}
+            className="w-full border border-borde rounded-lg px-3 py-2 text-14-normal text-tinta bg-superficie focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/60"
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -31,7 +31,7 @@ export default async function NuevoSemestrePage({
   if (!session?.user?.id) redirect("/");
   const perfil = await prisma.perfilEstudiante.findUnique({
     where: { userId: session.user.id },
-    select: { id: true, planId: true },
+    select: { id: true, planId: true, universidadId: true },
   });
   if (!perfil) redirect("/onboarding");
 
@@ -193,6 +193,15 @@ export default async function NuevoSemestrePage({
     bloque = claves.length > 0 ? porGrupo.get(claves[0])! : sueltas.slice(0, MAX_SUELTAS);
   }
 
+  // Catálogo de profesores de la universidad, para el combobox de cada materia.
+  const profesores = (
+    await prisma.profesor.findMany({
+      where: { universidadId: perfil.universidadId },
+      select: { nombre: true },
+      orderBy: { nombre: "asc" },
+    })
+  ).map((p) => p.nombre);
+
   const bloqueIds = new Set(bloque.map((mp) => mp.id));
   const sugeridas = bloque.map(aMateria);
   // Buscables: el resto del plan que no está ya en este periodo, incluidas las
@@ -232,6 +241,7 @@ export default async function NuevoSemestrePage({
         sugeridas={sugeridas}
         otras={otras}
         historial={historial}
+        profesores={profesores}
         anio={anio}
         tipo={tipo}
         tieneAvance={tieneAvance}
