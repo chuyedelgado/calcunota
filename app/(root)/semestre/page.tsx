@@ -177,12 +177,23 @@ export default async function SemestrePage({
               />
             </div>
           </div>
-          <Link
-            href="/historial/importar"
-            className="shrink-0 text-14-normal font-semibold !text-primary-ink bg-primary-100 rounded-xl px-3 py-2 hover:bg-primary/15 transition-colors"
-          >
-            Cargar historial
-          </Link>
+          {/* Estas dos entradas son INCONDICIONALES a propósito: son las únicas
+              que quedan cuando el historial ya está cargado, y una importación
+              puede haber dejado materias fuera que hay que completar a mano. */}
+          <div className="shrink-0 flex flex-col items-end gap-1">
+            <Link
+              href="/historial/importar"
+              className="text-14-normal font-semibold !text-primary-ink bg-primary-100 rounded-xl px-3 py-2 hover:bg-primary/15 transition-colors"
+            >
+              Cargar historial
+            </Link>
+            <Link
+              href="/historial/cargar"
+              className="text-14-normal font-semibold !text-primary-ink underline underline-offset-2"
+            >
+              o márcalo a mano
+            </Link>
+          </div>
         </div>
 
         {/* Resumen: la razón por la que el usuario abre la app */}
@@ -226,6 +237,11 @@ export default async function SemestrePage({
               <Link href={`/semestre/cerrar?${query}`}>Cerrar semestre</Link>
             </Button>
           )}
+          {/* El armador no depende de que el periodo esté vacío: agregar una
+              materia suelta no debe cerrar la puerta a armar el resto. */}
+          <Button asChild className="border-2 border-borde bg-white !text-tinta rounded-2xl !text-[18px] p-3 shadow-suave">
+            <Link href={`/semestre/nuevo?${query}`}>Arma tu semestre</Link>
+          </Button>
           <Button asChild className="calcular_btn !text-[18px] !p-3">
             <Link href={`/semestre/agregar?${query}`}>Agregar materia</Link>
           </Button>
