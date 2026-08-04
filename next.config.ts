@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const esDesarrollo = process.env.NODE_ENV === "development";
 
+// Interruptor único para pasar la CSP de Report-Only a obligatoria. Se cambia a
+// `true` cuando la consola quede limpia navegando toda la app; entonces empieza a
+// BLOQUEAR de verdad. No hace falta tocar nada más: la cabecera y
+// 'upgrade-insecure-requests' se ajustan solos.
+const CSP_OBLIGATORIA = false;
+
 // Content-Security-Policy. Va en Report-Only a propósito: Next inyecta scripts y
 // estilos en línea (hidratación, Tailwind), así que una CSP estricta de golpe
 // rompe la app. En Report-Only el navegador NO bloquea nada, solo reporta la
@@ -29,7 +35,9 @@ const csp = [
   "manifest-src 'self'",
   "frame-src 'none'",
   "worker-src 'self' blob:",
-  "upgrade-insecure-requests",
+  // 'upgrade-insecure-requests' se añade SOLO cuando la CSP es obligatoria: en
+  // Report-Only el navegador lo ignora y únicamente genera ruido en la consola.
+  ...(CSP_OBLIGATORIA ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
 const cabecerasSeguridad = [
@@ -58,7 +66,10 @@ const cabecerasSeguridad = [
       "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=()",
   },
 
-  { key: "Content-Security-Policy-Report-Only", value: csp },
+  {
+    key: CSP_OBLIGATORIA ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only",
+    value: csp,
+  },
 ];
 
 const nextConfig: NextConfig = {

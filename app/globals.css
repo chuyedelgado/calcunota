@@ -1,4 +1,7 @@
-@import url("https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=swap");
+/* Work Sans NO se importa de Google Fonts: la sirve next/font/local desde
+   app/fonts/ (ver app/layout.tsx), en nuestro propio dominio. El @import que
+   había aquí era un duplicado que bloqueaba el render, anulaba el beneficio de
+   next/font y era la única causa de los avisos de CSP. */
 
 @tailwind base;
 @tailwind components;

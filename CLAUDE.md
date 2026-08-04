@@ -253,11 +253,24 @@ Pendiente de verdad:
    `"Sáenz-Rodríguez"` queda `"Sáenz-rodríguez"`. Es preexistente y no afecta a
    búsquedas ni a cálculos (`normalizar()` iguala igual). Vive en `lib/texto.ts`,
    que es de solo lectura.
-8. **CSP en Report-Only.** `next.config.ts` sirve la CSP como
-   `Content-Security-Policy-Report-Only`: reporta en consola sin bloquear. Cuando
-   la consola quede limpia navegando toda la app, pasarla a obligatoria. Quitar
-   `'unsafe-inline'` de `script-src` exige nonces y por tanto `middleware.ts`
-   (ver deuda #2 sobre el runtime edge).
+8. **CSP en Report-Only — hay un interruptor listo.** `next.config.ts` define
+   `const CSP_OBLIGATORIA = false` (arriba del todo). En `false` la cabecera sale
+   como `Content-Security-Policy-Report-Only`: el navegador **no bloquea nada**,
+   solo reporta en consola. En `true` pasa a `Content-Security-Policy` a secas y
+   además se añade `upgrade-insecure-requests` (en Report-Only el navegador lo
+   ignora y solo mete ruido). **Es lo único que hay que cambiar**: no se toca la
+   lista de directivas ni la de cabeceras.
+
+   **Antes de ponerlo en `true`, navegar la app entera con la consola abierta y
+   confirmar cero avisos de CSP** en: landing, login con Google (avatar de
+   `googleusercontent`), onboarding, `/semestre`, calculadora, `/carrera`,
+   `/perfil`, `/historial/importar` (subida de PDF), `/privacidad`, `/terminos` y
+   las pantallas de error. Si aparece un aviso, la respuesta correcta es quitar
+   la dependencia externa, no ensanchar la CSP — así se resolvió el `@import` de
+   Google Fonts, que resultó ser peso muerto porque la fuente ya era local.
+
+   Lo que **no** arregla el interruptor: quitar `'unsafe-inline'` de `script-src`
+   exige nonces y por tanto `middleware.ts` (ver deuda #2 sobre el runtime edge).
 
 ## Próximos pasos, en orden
 
