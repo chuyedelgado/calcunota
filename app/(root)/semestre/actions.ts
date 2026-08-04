@@ -13,6 +13,7 @@ import {
 } from "@/lib/calculos";
 import { calcularIndiceDesdeCursos } from "@/lib/indice";
 import { nombreProfesor } from "@/lib/texto";
+import { validarNombreProfesor } from "@/lib/profesor";
 import { parseTipoPeriodo } from "./periodo";
 
 export type EstadoCrearCurso = { error?: string };
@@ -72,7 +73,9 @@ export async function crearCurso(
   const materiaPlanId = String(formData.get("materiaPlanId") ?? "");
   const anio = Number(formData.get("anio"));
   const tipo: TipoPeriodo = parseTipoPeriodo(formData.get("tipo"));
-  const profesorNombre = nombreProfesor(String(formData.get("profesorNombre") ?? ""));
+  const vProfesor = validarNombreProfesor(String(formData.get("profesorNombre") ?? ""));
+  if (!vProfesor.ok) return { error: vProfesor.error };
+  const profesorNombre = vProfesor.nombre;
   const seccionesRaw = String(formData.get("secciones") ?? "");
 
   if (!materiaPlanId) {
@@ -144,7 +147,10 @@ export async function crearCurso(
   const profIdPorNombre = new Map<string, string>();
   for (const f of filas) {
     const subs = f.subsecciones ?? [];
-    const nombre = subs.length > 0 && f.profesorNombre ? nombreProfesor(f.profesorNombre) : "";
+    // El nombre entra al catálogo COMPARTIDO: se valida antes de escribirlo.
+    const v = subs.length > 0 ? validarNombreProfesor(f.profesorNombre) : ({ ok: true, nombre: "" } as const);
+    if (!v.ok) return { error: v.error };
+    const nombre = v.nombre;
     if (nombre && !profIdPorNombre.has(nombre)) {
       const prof = await prisma.profesor.upsert({
         where: { universidadId_nombre: { universidadId: perfil.universidadId, nombre } },

@@ -14,6 +14,7 @@ import {
   type TipoPeriodo,
 } from "@/lib/calculos";
 import { nombreProfesor } from "@/lib/texto";
+import { validarNombreProfesor } from "@/lib/profesor";
 import type { SeccionData } from "./tipos";
 
 async function perfilDeSesion() {
@@ -253,7 +254,13 @@ export async function guardarEsquema(
   // Profesores de laboratorio (por nombre normalizado).
   const profIdPorNombre = new Map<string, string>();
   for (const s of secciones) {
-    const nombre = (s.subsecciones?.length ?? 0) > 0 && s.profesorNombre ? nombreProfesor(s.profesorNombre) : "";
+    // El nombre entra al catálogo COMPARTIDO: se valida antes de escribirlo.
+    const v =
+      (s.subsecciones?.length ?? 0) > 0
+        ? validarNombreProfesor(s.profesorNombre)
+        : ({ ok: true, nombre: "" } as const);
+    if (!v.ok) return { ok: false, error: v.error };
+    const nombre = v.nombre;
     if (nombre && !profIdPorNombre.has(nombre)) {
       const prof = await prisma.profesor.upsert({
         where: { universidadId_nombre: { universidadId: perfil.universidadId, nombre } },
@@ -540,7 +547,10 @@ export async function cerrarCurso(input: {
   const estado = input.notaFinal >= APROBACION_NORMAL ? "APROBADO" : "REPROBADO";
 
   let profesorId: string | undefined;
-  const nombre = input.profesorNombre?.trim() ? nombreProfesor(input.profesorNombre) : "";
+  // El nombre entra al catálogo COMPARTIDO: se valida antes de escribirlo.
+  const vProf = validarNombreProfesor(input.profesorNombre);
+  if (!vProf.ok) return { ok: false, error: vProf.error };
+  const nombre = vProf.nombre;
   if (nombre) {
     const prof = await prisma.profesor.upsert({
       where: { universidadId_nombre: { universidadId: perfil.universidadId, nombre } },

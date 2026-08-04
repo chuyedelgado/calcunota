@@ -12,6 +12,7 @@ import {
 } from "@/lib/calculos";
 import { buscar, nombreProfesor } from "@/lib/texto";
 import { materiasDeUniversidad } from "@/lib/catalogo";
+import { validarNombreProfesor } from "@/lib/profesor";
 
 async function perfilDeSesion() {
   const session = await auth();
@@ -166,6 +167,12 @@ export async function guardarHistorial(items: ItemHistorial[]): Promise<Resultad
       estado = letraAprueba(letra) ? "APROBADO" : "REPROBADO";
     }
 
+    // El nombre entra al catálogo COMPARTIDO: se valida antes de escribirlo, y
+    // se valida aquí (no al hacer el upsert) para no dejar el lote a medio
+    // guardar por un nombre inadmisible en la última materia.
+    const vProf = validarNombreProfesor(it.profesorNombre);
+    if (!vProf.ok) return { ok: false, error: vProf.error, guardados: [] };
+
     resueltos.push({
       materiaId,
       creditos,
@@ -175,7 +182,7 @@ export async function guardarHistorial(items: ItemHistorial[]): Promise<Resultad
       letra,
       puntos,
       estado,
-      profesorNombre: it.profesorNombre ?? null,
+      profesorNombre: vProf.nombre || null,
     });
   }
 
