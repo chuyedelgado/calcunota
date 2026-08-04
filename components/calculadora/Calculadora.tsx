@@ -228,6 +228,11 @@ export default function Calculadora({
 
       <PanelObjetivo seccionesEval={seccionesEval} objetivoAprobar={objetivoAprobar} fundamental={fundamental} />
 
+      {/* El esquema va ANTES de registrar notas: los pesos que trae la materia son
+          los típicos, no los de su profesor. Al final de la pantalla el estudiante
+          no descubría que podía cambiarlos y capturaba notas sobre pesos ajenos. */}
+      <BloqueEsquema secciones={secciones} onGuardar={onGuardarEsquema} antesDeGuardar={antesDeGuardarEsquema} />
+
       {/* Captura */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -358,8 +363,6 @@ export default function Calculadora({
           </div>
         )}
       </div>
-
-      <BloqueEsquema secciones={secciones} onGuardar={onGuardarEsquema} antesDeGuardar={antesDeGuardarEsquema} />
 
       {notaAbierta && seccionAbierta && notaAbiertaObj && (
         <HojaNota
@@ -633,12 +636,16 @@ function BloqueEsquema({
 
   return (
     <details className="tarjeta">
-      <summary className="cursor-pointer select-none text-16-medium font-semibold p-4">
-        Ajustar esquema de evaluación
+      <summary className="cursor-pointer select-none p-4">
+        <span className="text-16-medium font-semibold">Esquema de evaluación</span>
+        <span className="block text-14-normal !text-black-300 mt-0.5">
+          Estos son los pesos típicos; ajústalos a tu materia.
+        </span>
       </summary>
       <div className="p-4 pt-0 space-y-3">
         <p className="text-14-normal !text-black-300">
-          Pesos, número de notas y subsecciones. Al bajar la cantidad solo se eliminan notas vacías.
+          Cambia el porcentaje de cada sección, cuántas notas lleva y sus subsecciones (laboratorio).
+          Al bajar la cantidad solo se eliminan notas vacías.
         </p>
         <EditorSecciones secciones={borrador} onChange={setBorrador} />
         {mensaje && <p className="text-14-normal !text-black-300">{mensaje}</p>}
