@@ -434,11 +434,14 @@ export default async function CarreraPage() {
         </div>
       )}
 
-      <p className="mt-10 text-center">
-        <Link href="/semestre" className="text-16-medium !text-primary-ink underline font-semibold">
+      <div className="mt-10 flex justify-center">
+        <Link
+          href="/semestre"
+          className="btn-secundario inline-flex items-center justify-center min-h-[44px] px-6 rounded-xl"
+        >
           Ir a mi semestre
         </Link>
-      </p>
+      </div>
     </section>
   );
 }
