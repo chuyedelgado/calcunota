@@ -425,11 +425,13 @@ export default function ImportarHistorial({
         </div>
       )}
 
-      {/* Periodos y materias */}
+      {/* Periodos y materias. Las omitidas salen de aquí y se agrupan al final,
+          para no perderlas de vista entre decenas de materias. */}
       {periodos.map((p) => {
         const filasP = filas.filter(
-          (f) => f.periodo.anio === p.anio && f.periodo.tipo === p.tipo,
+          (f) => !f.omitida && f.periodo.anio === p.anio && f.periodo.tipo === p.tipo,
         );
+        if (filasP.length === 0) return null;
         const idx = indicePorPeriodo.find((i) => i.p.seq === p.seq);
         return (
           <div key={`${p.anio}-${p.tipo}`}>
@@ -454,6 +456,45 @@ export default function ImportarHistorial({
           </div>
         );
       })}
+
+      {/* Omitidas: NADA es destructivo antes de confirmar. Se quedan aquí,
+          atenuadas y agrupadas, con un botón para devolverlas a su periodo. */}
+      {resumen.omitidas > 0 && (
+        <div className="tarjeta p-4">
+          <p className="text-16-medium font-semibold text-tinta mb-1">
+            Omitidas ({resumen.omitidas})
+          </p>
+          <p className="text-14-normal !text-black-300 mb-3">
+            No se guardarán. Puedes recuperarlas: nada se pierde hasta que confirmes.
+          </p>
+          <div className="space-y-2">
+            {filas
+              .filter((f) => f.omitida)
+              .map((f) => (
+                <div
+                  key={f.indice}
+                  className="rounded-xl border border-hairline bg-white p-3 flex items-start gap-3 opacity-70"
+                >
+                  <BadgeLetra codigo={f.codigoNota} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-16-medium font-semibold text-tinta">{f.nombreHistorial}</p>
+                    <p className="text-14-normal !text-black-300">
+                      {nombrePeriodo(f.periodo.anio, f.periodo.tipo)}
+                      {f.materiaId ? ` · ${f.codigo} · ${f.creditos} cr.` : " · sin materia asignada"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => alternarOmitir(f.indice)}
+                    className="shrink-0 min-h-[44px] px-3.5 rounded-xl bg-primary-100 text-14-normal font-semibold !text-primary-ink hover:bg-primary/15 transition-colors"
+                  >
+                    Recuperar
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Índice total + autoverificación */}
       <div className="tarjeta-hero p-5">
