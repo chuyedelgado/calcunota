@@ -16,6 +16,7 @@ import { buscar } from "@/lib/texto";
 import { parsearHistorial, type CodigoNota, type FilaHistorial } from "@/lib/importarHistorial";
 import { extraerTextoHistorial } from "@/lib/importarHistorialPdf";
 import { emparejarHistorial, type Emparejamiento, type MateriaRef } from "@/lib/emparejarHistorial";
+import { creditosFrecuentes, materiasDeUniversidad } from "@/lib/catalogo";
 
 const LIMITE_BYTES = 5 * 1024 * 1024; // 5 MB
 const TIPOS_VALIDOS = new Set<TipoPeriodo>(["PRIMER_SEMESTRE", "SEGUNDO_SEMESTRE", "VERANO"]);
@@ -48,23 +49,6 @@ async function refsDelPlan(planId: string): Promise<MateriaRef[]> {
     }));
 }
 
-// Créditos más frecuentes por materia (para las convalidadas fuera del plan).
-async function creditosFrecuentes(): Promise<Map<string, number>> {
-  const grupos = await prisma.materiaPlan.groupBy({
-    by: ["materiaId", "creditos"],
-    _count: { _all: true },
-  });
-  const mejor = new Map<string, { creditos: number; n: number }>();
-  for (const g of grupos) {
-    const prev = mejor.get(g.materiaId);
-    const n = g._count._all;
-    if (!prev || n > prev.n || (n === prev.n && g.creditos > prev.creditos)) {
-      mejor.set(g.materiaId, { creditos: g.creditos, n });
-    }
-  }
-  return new Map([...mejor].map(([k, v]) => [k, v.creditos]));
-}
-
 // Empareja las filas contra un plan concreto: arma refs del plan + catálogo y
 // llama al motor puro. Se comparte entre el primer procesado (con PDF) y el
 // reemparejado (cuando el estudiante cambia de plan sin volver a subir el PDF).
@@ -73,14 +57,13 @@ async function emparejarContraPlan(
   planId: string,
   universidadId: string,
 ): Promise<Emparejamiento[]> {
-  const [planRefs, creditos] = await Promise.all([refsDelPlan(planId), creditosFrecuentes()]);
+  const [planRefs, creditos, todas] = await Promise.all([
+    refsDelPlan(planId),
+    creditosFrecuentes(),
+    materiasDeUniversidad(universidadId),
+  ]);
   const enPlan = new Set(planRefs.map((r) => r.materiaId));
-  const catalogo: MateriaRef[] = (
-    await prisma.materia.findMany({
-      where: { universidadId },
-      select: { id: true, codigo: true, nombre: true },
-    })
-  )
+  const catalogo: MateriaRef[] = todas
     .filter((m) => !enPlan.has(m.id) && !esMarcadorDeElectiva(m.codigo))
     .map((m) => ({
       materiaId: m.id,
@@ -191,16 +174,14 @@ export async function reemparejarConPlan(
 export async function buscarMateriaParaImportar(query: string, planId: string): Promise<MateriaRef[]> {
   const perfil = await perfilDeSesion();
   if (!perfil) return [];
-  const q = query.trim();
+  const q = query.trim().slice(0, 80);
   if (q.length < 2) return [];
 
   const planRefs = await refsDelPlan(planId);
   const enPlan = new Map(planRefs.map((r) => [r.materiaId, r]));
 
-  const todas = await prisma.materia.findMany({
-    where: { universidadId: perfil.universidadId },
-    select: { id: true, codigo: true, nombre: true },
-  });
+  // Catálogo desde la caché: buscar() lo necesita completo para tolerar tildes.
+  const todas = await materiasDeUniversidad(perfil.universidadId);
   const top = buscar(todas, q, (m) => `${m.codigo} ${m.nombre}`)
     .filter((m) => !esMarcadorDeElectiva(m.codigo))
     .slice(0, 20);

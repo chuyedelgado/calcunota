@@ -11,6 +11,7 @@ import {
   type TipoPeriodo,
 } from "@/lib/calculos";
 import { buscar, nombreProfesor } from "@/lib/texto";
+import { materiasDeUniversidad } from "@/lib/catalogo";
 
 async function perfilDeSesion() {
   const session = await auth();
@@ -37,17 +38,16 @@ export type MateriaBuscada = {
 export async function buscarMaterias(query: string): Promise<MateriaBuscada[]> {
   const perfil = await perfilDeSesion();
   if (!perfil) return [];
-  const q = query.trim();
+  const q = query.trim().slice(0, 80);
   if (q.length < 2) return [];
 
   // Filtro tolerante en memoria (tildes, mayúsculas, romanos, orden libre) con
   // lib/texto, en dos pasos: primero se acota el catálogo con lo ligero
   // (código + nombre) y luego se leen créditos/fundamental solo de las 25 que
   // pasan, para no arrastrar la relación `planes` de toda la universidad.
-  const todas = await prisma.materia.findMany({
-    where: { universidadId: perfil.universidadId },
-    select: { id: true, codigo: true, nombre: true },
-  });
+  // El catálogo viene de la caché de lib/catalogo.ts, no de la base en cada
+  // pulsación: buscar() necesita verlo completo para tolerar las tildes.
+  const todas = await materiasDeUniversidad(perfil.universidadId);
   const top = buscar(todas, q, (m) => `${m.codigo} ${m.nombre}`).slice(0, 25);
   if (top.length === 0) return [];
 
