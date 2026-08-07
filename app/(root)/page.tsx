@@ -80,19 +80,40 @@ export default async function Home() {
       </header>
 
       <main className="max-w-2xl mx-auto px-5">
-        {/* Hero */}
-        <section className="text-center pt-16 pb-14">
+        {/* Hero.
+            El <h1> lleva el NOMBRE y la promesa, en ese orden. Antes era solo la
+            promesa ("¿Vas a pasar la materia?"): el nombre existía en el <title>,
+            en el rótulo de la cabecera y en el pie, pero no en el encabezado
+            principal, y la verificación de marca de Google lo leyó como que el
+            nombre de la página no coincidía con el de la pantalla de
+            consentimiento.
+
+            El párrafo de debajo describe el propósito de forma literal —qué es,
+            para quién y qué hace— y va antes del botón para que se lea sin
+            desplazarse en un móvil. */}
+        <section className="text-center pt-10 sm:pt-16 pb-14">
           <p className="text-[12px] uppercase tracking-[0.12em] font-bold !text-primary-ink">
             Gratis · sin registrarte
           </p>
-          <h1 className="text-[38px] sm:text-[52px] font-extrabold leading-[1.05] tracking-tight text-tinta text-balance mt-3">
-            ¿Vas a pasar la materia?
+          <h1 className="mt-3 text-balance">
+            <span className="block text-[38px] sm:text-[52px] font-extrabold leading-[1.05] tracking-tight text-tinta">
+              CalcuNota
+            </span>
+            <span className="block text-[22px] sm:text-[28px] font-bold leading-tight tracking-tight text-tinta mt-2">
+              ¿Vas a pasar la materia?
+            </span>
           </h1>
-          <p className="text-20-medium text-black-300 mt-5 max-w-lg mx-auto">
+          <p className="text-16-medium !text-black-300 mt-5 max-w-xl mx-auto leading-relaxed">
+            CalcuNota es una herramienta gratuita para estudiantes de la{" "}
+            <strong className="font-semibold text-tinta">Universidad Tecnológica de Panamá (UTP)</strong>.
+            Calcula tu índice académico, proyecta qué notas necesitas para alcanzar tu objetivo y lleva
+            el seguimiento de tu avance de carrera.
+          </p>
+          <p className="text-16-medium !text-black-300 mt-3 max-w-lg mx-auto">
             Pon tus notas y mira al instante qué necesitas en lo que te falta. En menos de un minuto,
             desde el celular.
           </p>
-          <div className="mt-9">{cta}</div>
+          <div className="mt-8">{cta}</div>
         </section>
 
         {/* Qué ofrece */}

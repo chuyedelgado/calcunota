@@ -41,9 +41,19 @@ const workSans = localFont({
   variable: '--font-work-sans',
 });
 
+// El título es EXACTAMENTE el nombre de la app, sin lema ni sufijo: tiene que
+// coincidir letra por letra con el de la pantalla de consentimiento de Google
+// ("CalcuNota"). Cualquier variación de grafía o espaciado, o un título con
+// coletilla añadida, es motivo de rechazo en la verificación de marca.
+//
+// La descripción dice literalmente qué es, para quién y qué hace: el revisor
+// busca una descripción del propósito, no un titular publicitario.
 export const metadata: Metadata = {
   title: "CalcuNota",
-  description: "Tendrás oportunidad de salvar la materia? veámoslo.",
+  description:
+    "CalcuNota es una herramienta gratuita para estudiantes de la Universidad " +
+    "Tecnológica de Panamá (UTP). Calcula tu índice académico, proyecta qué notas " +
+    "necesitas para alcanzar tu objetivo y lleva el seguimiento de tu avance de carrera.",
 };
 
 export default function RootLayout({
