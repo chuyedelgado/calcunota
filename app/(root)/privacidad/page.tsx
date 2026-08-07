@@ -17,10 +17,10 @@ export default function PrivacidadPage() {
           CalcuNota es un proyecto operado por <strong>Jesús Delgado</strong>, estudiante de la
           Universidad Tecnológica de Panamá. Para cualquier consulta sobre tus datos:{" "}
           <a
-            href="mailto:chuye5610@gmail.com"
+            href="mailto:car1234da@gmail.com"
             className="font-semibold !text-primary-ink underline underline-offset-2"
           >
-            chuye5610@gmail.com
+            car1234da@gmail.com
           </a>
           .
         </p>
@@ -112,10 +112,10 @@ export default function PrivacidadPage() {
             </Link>
             . Para cualquier otra duda sobre tu información, escríbenos a{" "}
             <a
-              href="mailto:chuye5610@gmail.com"
+              href="mailto:car1234da@gmail.com"
               className="font-semibold !text-primary-ink underline underline-offset-2"
             >
-              chuye5610@gmail.com
+              car1234da@gmail.com
             </a>
             .
           </p>

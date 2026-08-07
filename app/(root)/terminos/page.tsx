@@ -75,10 +75,10 @@ export default function TerminosPage() {
           <p className="text-16-medium text-tinta leading-relaxed">
             ¿Un problema o una duda? Escríbenos a{" "}
             <a
-              href="mailto:chuye5610@gmail.com"
+              href="mailto:car1234da@gmail.com"
               className="font-semibold !text-primary-ink underline underline-offset-2"
             >
-              chuye5610@gmail.com
+              car1234da@gmail.com
             </a>
             . Leemos todo.
           </p>
